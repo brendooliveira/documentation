@@ -1,0 +1,107 @@
+<CodeGroup>
+
+```php PHP (Laravel)
+use Illuminate\Http\Request;
+
+public function receber(Request $request)
+{
+    // Corpo BRUTO. $request->all() desserializa, e reserializar quebra o HMAC.
+    $bruto = $request->getContent();
+
+    if (! preg_match('/^t=(\d+),v1=([0-9a-f]{64})$/', $request->header('X-Vext-Signature', ''), $m)) {
+        abort(400);
+    }
+
+    [, $timestamp, $assinatura] = $m;
+
+    // Janela de 5 minutos: sem isto, uma entrega interceptada pode ser reenviada para sempre.
+    if (abs(time() - (int) $timestamp) > 300) {
+        abort(400);
+    }
+
+    $esperada = hash_hmac('sha256', $timestamp.'.'.$bruto, config('services.vext.webhook_secret'));
+
+    // hash_equals compara em tempo constante. '===' vaza o prefixo correto pelo tempo de resposta.
+    if (! hash_equals($esperada, $assinatura)) {
+        abort(400);
+    }
+
+    $evento = json_decode($bruto, true); // só agora o evento é confiável
+
+    return response()->noContent();
+}
+```
+
+```javascript Node.js (Express)
+import crypto from 'node:crypto';
+
+// express.raw preserva o corpo bruto. express.json() o destruiria antes de você conferir.
+app.post('/webhooks/vext', express.raw({ type: 'application/json' }), (req, res) => {
+  const m = /^t=(\d+),v1=([0-9a-f]{64})$/.exec(req.get('X-Vext-Signature') ?? '');
+  if (!m) return res.sendStatus(400);
+
+  const [, timestamp, assinatura] = m;
+
+  // Janela de 5 minutos: sem isto, uma entrega interceptada pode ser reenviada para sempre.
+  if (Math.abs(Date.now() / 1000 - Number(timestamp)) > 300) return res.sendStatus(400);
+
+  const esperada = crypto
+    .createHmac('sha256', process.env.VEXT_WEBHOOK_SECRET)
+    .update(`${timestamp}.${req.body}`)
+    .digest('hex');
+
+  // timingSafeEqual exige buffers do mesmo tamanho — compare o comprimento antes.
+  const a = Buffer.from(esperada, 'hex');
+  const b = Buffer.from(assinatura, 'hex');
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return res.sendStatus(400);
+
+  const evento = JSON.parse(req.body); // só agora o evento é confiável
+
+  res.sendStatus(200);
+});
+```
+
+```python Python (Flask)
+import hashlib
+import hmac
+import os
+import re
+import time
+
+from flask import Flask, abort, request
+
+app = Flask(__name__)
+PADRAO = re.compile(r"^t=(\d+),v1=([0-9a-f]{64})$")
+
+
+@app.post("/webhooks/vext")
+def receber():
+    # Bytes crus. request.json desserializa, e reserializar quebra o HMAC.
+    bruto = request.get_data()
+
+    correspondencia = PADRAO.match(request.headers.get("X-Vext-Signature", ""))
+    if not correspondencia:
+        abort(400)
+
+    timestamp, assinatura = correspondencia.groups()
+
+    # Janela de 5 minutos: sem isto, uma entrega interceptada pode ser reenviada para sempre.
+    if abs(time.time() - int(timestamp)) > 300:
+        abort(400)
+
+    esperada = hmac.new(
+        os.environ["VEXT_WEBHOOK_SECRET"].encode(),
+        f"{timestamp}.".encode() + bruto,
+        hashlib.sha256,
+    ).hexdigest()
+
+    # compare_digest compara em tempo constante. '==' vaza o prefixo correto pelo tempo de resposta.
+    if not hmac.compare_digest(esperada, assinatura):
+        abort(400)
+
+    evento = request.get_json()  # só agora o evento é confiável
+
+    return "", 200
+```
+
+</CodeGroup>

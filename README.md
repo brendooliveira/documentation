@@ -1,55 +1,60 @@
-# Mintlify Starter Kit
+# Documentação da Vext
 
-Use the starter kit to get your docs deployed and ready to customize.
+Site de documentação da API de pagamentos PIX com split da Vext, construído em
+[Mintlify](https://mintlify.com).
 
-Click the green **Use this template** button at the top of this repo to copy the Mintlify starter kit. The starter kit contains examples with
+## Estrutura
 
-- Guide pages
-- Navigation
-- Customizations
-- API reference pages
-- Use of popular components
+```
+docs.json              Configuração do site: navegação, marca, playground
+index.mdx              Introdução
+quickstart.mdx         Primeira cobrança
+essenciais/            Conceitos: centavos, autenticação, idempotência, erros,
+                       limites, ciclo de vida, estornos, saldo
+webhooks/              Guia: visão geral, assinatura, entregas e retentativas
+receitas/              Fluxos ponta a ponta
+api-reference/
+  openapi.yaml         Fonte de verdade do comportamento da API
+  ...                  Páginas de endpoint e de evento, ligadas à spec pelo frontmatter
+snippets/              Trechos reutilizáveis
+logo/, favicon.svg     Marca
+```
 
-**[Follow the full quickstart guide](https://starter.mintlify.com/quickstart)**
+`AGENTS.md` traz o guia de voz, a política de fonte única e as convenções de escrita. Leia antes de
+alterar conteúdo.
 
-## AI-assisted writing
+## Desenvolvimento
 
-Set up your AI coding tool to work with Mintlify:
+Instale o CLI da Mintlify:
 
 ```bash
-npx skills add https://mintlify.com/docs
-```
-
-This command installs Mintlify's documentation skill for your configured AI tools like Claude Code, Cursor, Windsurf, and others. The skill includes component reference, writing standards, and workflow guidance.
-
-See the [AI tools guides](/ai-tools) for tool-specific setup.
-
-## Development
-
-Install the [Mintlify CLI](https://www.npmjs.com/package/mint) to preview your documentation changes locally. To install, use the following command:
-
-```
 npm i -g mint
 ```
 
-Run the following command at the root of your documentation, where your `docs.json` is located:
+Rode na raiz, onde está o `docs.json`:
 
-```
+```bash
 mint dev
 ```
 
-View your local preview at `http://localhost:3000`.
+A pré-visualização fica em `http://localhost:3000`.
 
-## Publishing changes
+Antes de abrir um PR:
 
-Install our GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app) to propagate changes from your repo to your deployment. Changes are deployed to production automatically after pushing to the default branch.
+```bash
+mint broken-links
+```
 
-## Need help?
+## Publicação
 
-### Troubleshooting
+O app do GitHub da Mintlify propaga as mudanças do repositório para o deploy. Alterações na branch
+padrão vão para produção automaticamente.
 
-- If your dev environment isn't running: Run `mint update` to ensure you have the most recent version of the CLI.
-- If a page loads as a 404: Make sure you are running in a folder with a valid `docs.json`.
+## Problemas comuns
 
-### Resources
-- [Mintlify documentation](https://mintlify.com/docs)
+- **Editou o `openapi.yaml` e a página não mudou:** o `mint dev` recarrega MDX a quente, mas cacheia
+  a spec. Reinicie o servidor. Se você confiar no hot reload aqui, vai revisar a versão antiga
+  achando que revisou a nova.
+- Ambiente de desenvolvimento não sobe: rode `mint update` para atualizar o CLI.
+- Página carrega como 404: confirme que você está rodando em uma pasta com um `docs.json` válido, e
+  que o caminho da página está na navegação do `docs.json`.

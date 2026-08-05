@@ -1,0 +1,1659 @@
+openapi: 3.1.0
+
+info:
+  title: Vext - API de pagamentos PIX com split
+  version: '1.0.0'
+  summary: Cobranças PIX, estornos e saldo do vendedor.
+  description: |
+    API pública do gateway. Todo endpoint desta versão vive sob `/v1`.
+
+    Quatro regras valem para toda chamada. Cada uma tem uma página própria
+    nos guias, com exemplos nas quatro linguagens.
+
+    - **Dinheiro é sempre centavos inteiros.** R$ 100,00 se envia como
+      `10000`; um decimal devolve `422`. Ver
+      [Valores em centavos](/essenciais/valores-em-centavos).
+    - **A chave secreta vai no header e fica no servidor.** Cada chave
+      carrega escopos; fora do escopo devolve `403`, e não `401`. Ver
+      [Autenticação](/essenciais/autenticacao).
+    - **Envie `Idempotency-Key` em todo `POST`.** Repetir com a mesma chave
+      devolve a resposta gravada em vez de criar um segundo recurso. Ver
+      [Idempotência](/essenciais/idempotencia).
+    - **Trate os erros pelo `code`**, nunca pela `message` - o código é
+      contrato, o texto pode ser reescrito a qualquer momento. Ver
+      [Erros](/essenciais/erros).
+
+  contact:
+    name: Suporte Vext
+    email: suporte@vext.com.br
+
+servers:
+  - url: https://api.vext.com.br
+    description: Produção
+
+security:
+  - apiKey: []
+
+tags:
+  - name: Cobranças
+    description: Criação, consulta e estorno de cobranças PIX.
+  - name: Saldo
+    description: Quanto o vendedor tem e quanto pode sacar.
+
+paths:
+  /v1/charges:
+    post:
+      tags: [Cobranças]
+      summary: Criar cobrança PIX
+      operationId: createCharge
+      description: |
+        Cria uma cobrança PIX com split entre o vendedor e a plataforma. A
+        resposta traz o payload copia-e-cola (`pix.qr_code`) já pronto para
+        exibir ao comprador.
+
+        A imagem do QR **não** é devolvida: ela é derivada do payload na
+        hora de exibir, e mandar um PNG em base64 em toda resposta
+        multiplicaria o corpo por algo que você gera localmente.
+      security:
+        - apiKey: [charges:write]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateChargeRequest'
+            examples:
+              simples:
+                summary: Cobrança de R$ 100,00
+                value:
+                  amount: 10000
+                  description: Curso de Vue 3
+                  reference: pedido-1042
+                  customer:
+                    name: João Comprador
+                    email: joao@exemplo.com.br
+                    document: '11144477735'
+                    document_type: CPF
+                    phone_ddd: '11'
+                    phone_number: '987654321'
+              comItens:
+                summary: Com itens discriminados
+                description: |
+                  A soma de `quantity * amount` de todos os itens precisa
+                  bater exatamente com `amount`. Sem essa conferência o
+                  comprador veria um total diferente da soma do que está
+                  levando.
+                value:
+                  amount: 10000
+                  expires_in: 1800
+                  customer:
+                    name: Maria Compradora
+                    document: '11144477735'
+                  items:
+                    - code: curso-vue
+                      description: Curso de Vue 3
+                      quantity: 1
+                      amount: 6000
+                    - code: ebook
+                      description: E-book de apoio
+                      quantity: 2
+                      amount: 2000
+      responses:
+        '201':
+          description: Cobrança criada e aguardando pagamento.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Charge'
+              examples:
+                criada:
+                  $ref: '#/components/examples/ChargePendente'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/IdempotencyConflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableCharge'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '502':
+          $ref: '#/components/responses/ProviderUnavailable'
+        '503':
+          $ref: '#/components/responses/PlatformUnavailable'
+
+    get:
+      tags: [Cobranças]
+      summary: Listar cobranças
+      operationId: listCharges
+      description: |
+        Lista as cobranças da conta, da mais recente para a mais antiga.
+        Apenas as cobranças do vendedor dono da chave - não existe forma de
+        alcançar a venda de outra conta por esta API.
+      security:
+        - apiKey: [charges:read]
+      parameters:
+        - name: status
+          in: query
+          description: Filtra por situação.
+          schema:
+            $ref: '#/components/schemas/ChargeStatus'
+        - name: reference
+          in: query
+          description: |
+            Sua referência, exatamente como enviada em `reference` na
+            criação. É o caminho para reencontrar uma cobrança sem guardar
+            o `id` que devolvemos.
+          schema:
+            type: string
+            maxLength: 120
+          example: pedido-1042
+        - name: created_from
+          in: query
+          description: Criadas a partir desta data e hora (ISO 8601).
+          schema:
+            type: string
+            format: date-time
+          example: '2026-08-01T00:00:00-03:00'
+        - name: created_to
+          in: query
+          description: Criadas até esta data e hora (ISO 8601).
+          schema:
+            type: string
+            format: date-time
+          example: '2026-08-31T23:59:59-03:00'
+        - name: per_page
+          in: query
+          description: |
+            Itens por página. O teto de 100 existe porque uma página gigante
+            de um vendedor com histórico degrada a consulta para todos os
+            outros.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 25
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+      responses:
+        '200':
+          description: Página de cobranças.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChargeList'
+              examples:
+                pagina:
+                  summary: Primeira página
+                  value:
+                    object: list
+                    data:
+                      - object: charge
+                        id: ch_01k1y6r6m6q2x0p3d9v4t7c8n2
+                        status: paid
+                        payment_method: pix
+                        amount: 10000
+                        currency: BRL
+                        platform_fee: 798
+                        net_amount: 9202
+                        refunded_amount: 0
+                        description: Curso de Vue 3
+                        reference: pedido-1042
+                        customer:
+                          name: João Comprador
+                          email: joao@exemplo.com.br
+                          document: '111.***.***-35'
+                        pix:
+                          qr_code: 00020101021226840014br.gov.bcb.pix2562qrcodepix.example.com/v2/abcd1234
+                          expires_at: '2026-08-04T15:00:00+00:00'
+                          end_2_end_id: E12345678202608041200
+                        created_at: '2026-08-04T14:00:00+00:00'
+                        paid_at: '2026-08-04T14:03:11+00:00'
+                        expired_at: null
+                        refunded_at: null
+                    pagination:
+                      page: 1
+                      per_page: 25
+                      total: 1
+                      total_pages: 1
+                      has_more: false
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /v1/charges/{code}:
+    get:
+      tags: [Cobranças]
+      summary: Consultar cobrança
+      operationId: getCharge
+      security:
+        - apiKey: [charges:read]
+      parameters:
+        - $ref: '#/components/parameters/ChargeCode'
+      responses:
+        '200':
+          description: A cobrança.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Charge'
+              examples:
+                paga:
+                  $ref: '#/components/examples/ChargePaga'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /v1/charges/{code}/refund:
+    post:
+      tags: [Cobranças]
+      summary: Estornar cobrança
+      operationId: refundCharge
+      description: |
+        Devolve o dinheiro ao comprador, no todo ou em parte.
+
+        Sem `amount`, devolve **o que ainda cabe estornar** - e não o valor
+        da venda. Numa cobrança já devolvida pela metade, mandar o valor
+        cheio de volta tiraria o dinheiro duas vezes do vendedor.
+
+        O estorno **não** é barrado por falta de saldo: o dinheiro é do
+        comprador e precisa voltar. Se o vendedor já sacou, o saldo dele
+        fica negativo e as vendas seguintes cobrem automaticamente.
+
+        `amount`, `fee_returned` e `seller_debit` respondem coisas
+        diferentes e por isso vêm separados - é o que evita a pergunta "por
+        que saíram R$ 93,01 se eu estornei R$ 100,00?".
+      security:
+        - apiKey: [refunds:write]
+      parameters:
+        - $ref: '#/components/parameters/ChargeCode'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefundChargeRequest'
+            examples:
+              integral:
+                summary: Estorno do que resta
+                value:
+                  reason: Comprador desistiu
+              parcial:
+                summary: Estorno parcial de R$ 40,00
+                value:
+                  amount: 4000
+                  reason: Devolução de um item
+      responses:
+        '201':
+          description: Estorno registrado e enviado ao provedor.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Refund'
+              examples:
+                estornado:
+                  summary: Estorno integral de R$ 100,00
+                  description: |
+                    O comprador recebe `amount`. Do saldo do vendedor sai
+                    `seller_debit`; `fee_returned` é a parte da nossa taxa
+                    que devolvemos. Sempre
+                    `amount = seller_debit + fee_returned`.
+                  value:
+                    object: refund
+                    id: rf_01k1y7c3n8b5w2q9r4t6y8u1i3
+                    charge: ch_01k1y6r6m6q2x0p3d9v4t7c8n2
+                    status: succeeded
+                    amount: 10000
+                    currency: BRL
+                    fee_returned: 699
+                    seller_debit: 9301
+                    reason: Comprador desistiu
+                    failed_reason: null
+                    created_at: '2026-08-05T10:12:00+00:00'
+                    processed_at: '2026-08-05T10:12:02+00:00'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdempotencyConflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableRefund'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '502':
+          $ref: '#/components/responses/ProviderUnavailable'
+
+  /v1/balance:
+    get:
+      tags: [Saldo]
+      summary: Consultar saldo
+      operationId: getBalance
+      description: |
+        Quatro números, porque respondem perguntas diferentes:
+
+        - `balance` - tudo que o vendedor ganhou e ainda não sacou.
+        - `reserved` - a parte que a reserva rolante ainda segura.
+        - `available` - o que já pode sair pelo nosso extrato.
+        - `withdrawable` - o **menor** entre o nosso disponível e o do
+          provedor. É este que vale para pedir saque: usar só o nosso
+          permitiria pedir dinheiro que a adquirente ainda não liberou.
+
+        `provider` e `withdrawable` vêm `null` quando a consulta ao provedor
+        falha. `null` não é zero: zero diria que não há dinheiro, quando o
+        que houve foi uma consulta que não respondeu. O resto do saldo, que
+        é nosso, continua correto.
+      security:
+        - apiKey: [balance:read]
+      responses:
+        '200':
+          description: Saldo da conta.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Balance'
+              examples:
+                normal:
+                  summary: Provedor respondeu
+                  value:
+                    object: balance
+                    currency: BRL
+                    balance: 92020
+                    available: 82818
+                    reserved: 9202
+                    debt: 0
+                    withdrawable: 50000
+                    provider:
+                      available: 50000
+                      waiting_funds: 7000
+                indisponivel:
+                  summary: Provedor não respondeu
+                  value:
+                    object: balance
+                    currency: BRL
+                    balance: 92020
+                    available: 82818
+                    reserved: 9202
+                    debt: 0
+                    withdrawable: null
+                    provider: null
+                emDivida:
+                  summary: Vendedor no vermelho
+                  description: |
+                    Acontece quando um estorno chega depois do saque. Não é
+                    erro: as próximas vendas cobrem a dívida
+                    automaticamente, e apenas o saque fica bloqueado até lá.
+                  value:
+                    object: balance
+                    currency: BRL
+                    balance: -9301
+                    available: 0
+                    reserved: 0
+                    debt: 9301
+                    withdrawable: 0
+                    provider:
+                      available: 0
+                      waiting_funds: 0
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+# Eventos que NÓS enviamos para o seu sistema.
+#
+# Você pode cadastrar vários endpoints em Desenvolvedores - produção e
+# homologação são sistemas diferentes, e cada um recebe só os eventos que
+# assinou, com o seu próprio segredo de assinatura.
+#
+# Cada fato vira no máximo UMA entrega por endpoint: uma reentrega do
+# provedor para nós não vira uma segunda entrega para você. Uma entrega
+# que desistiu depois das retentativas pode ser reenviada à mão pelo
+# painel - e aí o `id` do evento é o MESMO, para a sua idempotência
+# reconhecê-lo.
+webhooks:
+  charge.paid:
+    post:
+      summary: Cobrança paga
+      operationId: webhookChargePaid
+      description: |
+        Enviado quando o PIX é confirmado. É o evento sobre o qual o seu
+        sistema deve agir - liberar acesso, faturar, dar baixa no pedido.
+
+        **Confira a assinatura antes de agir.** Quem tem o segredo consegue
+        forjar este evento, e um sistema que libera produto ao recebê-lo
+        entregaria de graça.
+      parameters:
+        - $ref: '#/components/parameters/SignatureHeader'
+        - $ref: '#/components/parameters/EventHeader'
+        - $ref: '#/components/parameters/DeliveryHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChargePaidEvent'
+            examples:
+              paga:
+                value:
+                  id: evt_01k1y6r7z2m4n6p8q0r2s4t6u8
+                  type: charge.paid
+                  created_at: '2026-08-04T14:03:12+00:00'
+                  data:
+                    charge:
+                      object: charge
+                      id: ch_01k1y6r6m6q2x0p3d9v4t7c8n2
+                      status: paid
+                      payment_method: pix
+                      amount: 10000
+                      currency: BRL
+                      platform_fee: 798
+                      net_amount: 9202
+                      refunded_amount: 0
+                      description: Curso de Vue 3
+                      reference: pedido-1042
+                      customer:
+                        name: João Comprador
+                        email: joao@exemplo.com.br
+                        document: '111.***.***-35'
+                      pix:
+                        qr_code: 00020101021226840014br.gov.bcb.pix2562qrcodepix.example.com/v2/abcd1234
+                        expires_at: '2026-08-04T15:00:00+00:00'
+                        end_2_end_id: E12345678202608041200
+                      created_at: '2026-08-04T14:00:00+00:00'
+                      paid_at: '2026-08-04T14:03:11+00:00'
+                      expired_at: null
+                      refunded_at: null
+      responses:
+        '200':
+          description: |
+            Recebido. Qualquer 2xx encerra a entrega. Responda rápido e
+            processe depois: demorar vira retentativa, e retentativa em
+            fluxo de dinheiro é como um pagamento acaba contabilizado duas
+            vezes.
+        default:
+          description: |
+            Qualquer resposta fora da faixa 2xx agenda nova tentativa.
+
+  charge.refunded:
+    post:
+      summary: Cobrança estornada
+      operationId: webhookChargeRefunded
+      description: |
+        Enviado quando um estorno é concluído - tanto o que você pediu pela
+        API quanto o feito por nós ou pelo provedor fora do seu fluxo.
+
+        O evento traz a cobrança **e** o estorno. Os dois porque as duas
+        perguntas aparecem juntas do outro lado: quanto voltou (o estorno) e
+        se sobrou algo (a cobrança, com `status` e `refunded_amount` já
+        atualizados). Uma venda devolvida pela metade fica
+        `partially_refunded`, não `refunded`.
+      parameters:
+        - $ref: '#/components/parameters/SignatureHeader'
+        - $ref: '#/components/parameters/EventHeader'
+        - $ref: '#/components/parameters/DeliveryHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChargeRefundedEvent'
+            examples:
+              parcial:
+                summary: Estorno parcial de R$ 40,00
+                value:
+                  id: evt_01k1y7c4a1b2c3d4e5f6g7h8i9
+                  type: charge.refunded
+                  created_at: '2026-08-05T10:12:03+00:00'
+                  data:
+                    charge:
+                      object: charge
+                      id: ch_01k1y6r6m6q2x0p3d9v4t7c8n2
+                      status: partially_refunded
+                      payment_method: pix
+                      amount: 10000
+                      currency: BRL
+                      platform_fee: 798
+                      net_amount: 9202
+                      refunded_amount: 4000
+                      description: Curso de Vue 3
+                      reference: pedido-1042
+                      customer:
+                        name: João Comprador
+                        email: joao@exemplo.com.br
+                        document: '111.***.***-35'
+                      pix:
+                        qr_code: 00020101021226840014br.gov.bcb.pix2562qrcodepix.example.com/v2/abcd1234
+                        expires_at: '2026-08-04T15:00:00+00:00'
+                        end_2_end_id: E12345678202608041200
+                      created_at: '2026-08-04T14:00:00+00:00'
+                      paid_at: '2026-08-04T14:03:11+00:00'
+                      expired_at: null
+                      refunded_at: '2026-08-05T10:12:02+00:00'
+                    refund:
+                      object: refund
+                      id: rf_01k1y7c3n8b5w2q9r4t6y8u1i3
+                      status: succeeded
+                      amount: 4000
+                      currency: BRL
+                      fee_returned: 280
+                      seller_debit: 3720
+                      reason: Devolução de um item
+                      created_at: '2026-08-05T10:12:00+00:00'
+      responses:
+        '200':
+          description: Recebido.
+        default:
+          description: Fora da faixa 2xx, agenda nova tentativa.
+
+  withdrawal.paid:
+    post:
+      summary: Saque pago
+      operationId: webhookWithdrawalPaid
+      description: |
+        Enviado quando o dinheiro chega à conta bancária do vendedor.
+
+        Os estados intermediários (`processing`, `pending`) **não** são
+        entregues: não pedem ação do seu lado, e cada entrega tem custo de
+        retentativa.
+      parameters:
+        - $ref: '#/components/parameters/SignatureHeader'
+        - $ref: '#/components/parameters/EventHeader'
+        - $ref: '#/components/parameters/DeliveryHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WithdrawalPaidEvent'
+            examples:
+              pago:
+                value:
+                  id: evt_01k1y8d5j2k3l4m5n6o7p8q9r0
+                  type: withdrawal.paid
+                  created_at: '2026-08-06T09:00:05+00:00'
+                  data:
+                    withdrawal:
+                      object: withdrawal
+                      id: wd_01k1y8d4h1g2f3e4d5c6b7a8z9
+                      status: paid
+                      currency: BRL
+                      amount: 50000
+                      fee: 367
+                      net_amount: 49633
+                      requested_at: '2026-08-06T08:59:00+00:00'
+                      processed_at: '2026-08-06T09:00:04+00:00'
+      responses:
+        '200':
+          description: Recebido.
+        default:
+          description: Fora da faixa 2xx, agenda nova tentativa.
+
+components:
+  securitySchemes:
+    apiKey:
+      type: http
+      scheme: bearer
+      bearerFormat: sk_live_… | sk_test_…
+      description: |
+        Chave secreta do vendedor, criada no painel em **Desenvolvedores**.
+
+        O valor em claro existe uma única vez, na criação. Guardamos só o
+        hash SHA-256 - nem o suporte consegue recuperá-lo, o que é o ponto:
+        um dump do nosso banco não permite cobrar em nome de ninguém.
+
+        A chave vai no **servidor**. Colocá-la no navegador do comprador a
+        entrega a qualquer pessoa que abra a página.
+
+  parameters:
+    ChargeCode:
+      name: code
+      in: path
+      required: true
+      description: Código público da cobrança, no formato `ch_…`.
+      schema:
+        type: string
+        pattern: '^ch_[0-9a-z]{26}$'
+      example: ch_01k1y6r6m6q2x0p3d9v4t7c8n2
+
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: |
+        Identificador único da SUA tentativa. Use o mesmo valor ao repetir
+        a requisição depois de um erro de rede.
+
+        Opcional, mas recomendado em toda criação de cobrança e estorno.
+        Sem ele, uma repetição cria uma segunda cobrança.
+      schema:
+        type: string
+        maxLength: 255
+      example: pedido-1042
+
+    SignatureHeader:
+      name: X-Vext-Signature
+      in: header
+      required: true
+      description: |
+        Assinatura da entrega, no formato `t=<timestamp>,v1=<hmac>`, onde
+        `hmac` é `HMAC-SHA256("<timestamp>.<corpo bruto>", <segredo>)`.
+
+        Duas regras ao conferir:
+
+        1. Calcule sobre o **corpo bruto**, antes de desserializar.
+           Reserializar muda espaçamento e ordem, e o HMAC deixa de bater.
+        2. **Recuse timestamps com mais de 5 minutos.** É isso que impede
+           alguém que interceptou uma entrega de `charge.paid` de reenviá-la
+           quantas vezes quiser, com assinatura perfeitamente válida.
+      schema:
+        type: string
+        pattern: '^t=[0-9]+,v1=[0-9a-f]{64}$'
+      example: t=1785931392,v1=8f3c1d0a5b7e9042c6a1b3d5e7f9012345678901abcdef234567890abcdef1234
+
+    EventHeader:
+      name: X-Vext-Event
+      in: header
+      required: true
+      description: |
+        Tipo do evento, repetido fora do corpo. Redundante com o payload e
+        útil mesmo assim: permite filtrar no seu log sem desserializar nada.
+      schema:
+        type: string
+      example: charge.paid
+
+    DeliveryHeader:
+      name: X-Vext-Delivery
+      in: header
+      required: true
+      description: |
+        Identificador da entrega. Cite-o ao abrir um chamado - é por ele que
+        localizamos a tentativa, a resposta do seu servidor e o horário.
+      schema:
+        type: string
+      example: '4821'
+
+  headers:
+    IdempotentReplayed:
+      description: |
+        Presente com valor `true` quando o corpo devolvido é uma resposta
+        **gravada**, e não um recurso novo. Nada foi criado nesta chamada.
+      schema:
+        type: string
+        enum: ['true']
+
+  schemas:
+    Cents:
+      type: integer
+      format: int64
+      description: |
+        Valor monetário em **centavos inteiros** de real. R$ 10,00 = `1000`.
+        Nunca decimal, nunca string.
+
+    ChargeStatus:
+      type: string
+      description: |
+        Situação da cobrança. Todos os estados exceto `pending` são
+        terminais - exceto os que ainda admitem estorno.
+
+        `partially_refunded` é estado próprio, e não um `refunded` com
+        asterisco: tratar uma venda devolvida pela metade como estornada
+        faria seu relatório descontar o valor inteiro.
+      enum:
+        - pending
+        - paid
+        - expired
+        - canceled
+        - partially_refunded
+        - refunded
+        - failed
+      x-labels:
+        pending: Aguardando pagamento
+        paid: Pago
+        expired: Expirado
+        canceled: Cancelado
+        partially_refunded: Estornado em parte
+        refunded: Estornado
+        failed: Falhou
+
+    RefundStatus:
+      type: string
+      enum: [pending, succeeded, failed]
+      description: |
+        `failed` significa que a devolução **não** aconteceu e o saldo do
+        vendedor foi reposto. A linha permanece de propósito: uma tentativa
+        de devolver dinheiro que não deu certo é exatamente o que alguém vai
+        procurar depois.
+
+    Customer:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          maxLength: 120
+          example: João Comprador
+        email:
+          type: [string, 'null']
+          format: email
+          maxLength: 180
+          example: joao@exemplo.com.br
+        document:
+          type: [string, 'null']
+          maxLength: 20
+          description: |
+            CPF ou CNPJ. Pontuação é aceita e descartada - guardamos apenas
+            os dígitos.
+          example: '111.444.777-35'
+        document_type:
+          type: [string, 'null']
+          enum: [CPF, CNPJ, PASSPORT, null]
+        phone_ddd:
+          type: [string, 'null']
+          maxLength: 3
+          example: '11'
+        phone_number:
+          type: [string, 'null']
+          maxLength: 12
+          example: '987654321'
+
+    CustomerSummary:
+      type: object
+      description: O comprador, como devolvemos.
+      properties:
+        name:
+          type: [string, 'null']
+        email:
+          type: [string, 'null']
+        document:
+          type: [string, 'null']
+          description: |
+            Mascarado. Você já enviou o documento; devolvê-lo inteiro em
+            toda consulta espalharia o dado sem nenhum ganho.
+          example: '111.***.***-35'
+
+    ChargeItem:
+      type: object
+      required: [description, quantity, amount]
+      properties:
+        code:
+          type: [string, 'null']
+          maxLength: 60
+          description: Seu código do produto.
+        description:
+          type: string
+          maxLength: 180
+        quantity:
+          type: integer
+          minimum: 1
+        amount:
+          allOf:
+            - $ref: '#/components/schemas/Cents'
+          description: |
+            Valor **unitário** em centavos inteiros. A soma de
+            `quantity * amount` de todos os itens precisa ser exatamente
+            igual ao `amount` da cobrança.
+
+    CreateChargeRequest:
+      type: object
+      required: [amount, customer]
+      properties:
+        amount:
+          allOf:
+            - $ref: '#/components/schemas/Cents'
+          minimum: 1
+          description: |
+            Valor total da cobrança, em **centavos inteiros**. R$ 100,00 =
+            `10000`. Um decimal aqui é recusado com `422`.
+        description:
+          type: [string, 'null']
+          maxLength: 255
+          description: Aparece para o comprador na tela de pagamento.
+        reference:
+          type: [string, 'null']
+          maxLength: 120
+          description: |
+            Sua referência (número do pedido, id interno). Volta na consulta
+            e nos webhooks, e serve de filtro em `GET /v1/charges` - é o que
+            permite casar a cobrança com o seu pedido sem guardar o nosso
+            `id`.
+        expires_in:
+          type: [integer, 'null']
+          minimum: 60
+          maximum: 604800
+          default: 3600
+          description: |
+            Validade do QR, em segundos. O piso de 60s evita uma cobrança
+            que expira antes de o comprador abrir o aplicativo do banco.
+        customer:
+          $ref: '#/components/schemas/Customer'
+        items:
+          type: [array, 'null']
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/ChargeItem'
+          description: |
+            Opcional. Sem itens, montamos um a partir de `description`.
+
+    RefundChargeRequest:
+      type: object
+      properties:
+        amount:
+          allOf:
+            - $ref: '#/components/schemas/Cents'
+          minimum: 1
+          description: |
+            Quanto devolver, em **centavos inteiros**. Omita para devolver
+            todo o saldo estornável da cobrança.
+        reason:
+          type: [string, 'null']
+          maxLength: 255
+          description: Motivo, para o seu histórico e o nosso.
+
+    Charge:
+      type: object
+      required:
+        - object
+        - id
+        - status
+        - payment_method
+        - amount
+        - currency
+      properties:
+        object:
+          type: string
+          const: charge
+        id:
+          type: string
+          description: |
+            Código público da cobrança. Nunca é a chave primária: expor o
+            autoincremento diria a qualquer cliente quantas vendas a
+            plataforma inteira processou.
+          example: ch_01k1y6r6m6q2x0p3d9v4t7c8n2
+        status:
+          $ref: '#/components/schemas/ChargeStatus'
+        payment_method:
+          type: string
+          enum: [pix]
+        amount:
+          allOf:
+            - $ref: '#/components/schemas/Cents'
+          description: Valor cobrado, em centavos inteiros.
+        currency:
+          type: string
+          const: BRL
+        platform_fee:
+          allOf:
+            - $ref: '#/components/schemas/Cents'
+          description: |
+            Nossa taxa, em centavos inteiros. Congelada na criação: reflete
+            o contrato que valia quando a venda aconteceu, não o de hoje.
+        net_amount:
+          allOf:
+            - $ref: '#/components/schemas/Cents'
+          description: |
+            O que fica com o vendedor, em centavos inteiros
+            (`amount - platform_fee`).
+        refunded_amount:
+          allOf:
+            - $ref: '#/components/schemas/Cents'
+          description: |
+            Total já devolvido ao comprador, em centavos inteiros. Acumulado
+            entre estornos parciais.
+        description:
+          type: [string, 'null']
+        reference:
+          type: [string, 'null']
+        customer:
+          $ref: '#/components/schemas/CustomerSummary'
+        pix:
+          type: object
+          properties:
+            qr_code:
+              type: [string, 'null']
+              description: |
+                Payload copia-e-cola do PIX. Gere a imagem do QR a partir
+                dele - não devolvemos PNG.
+            expires_at:
+              type: [string, 'null']
+              format: date-time
+            end_2_end_id:
+              type: [string, 'null']
+              description: |
+                Identificador da transação no Sistema de Pagamentos
+                Brasileiro. Aparece depois do pagamento e é o que o banco do
+                comprador reconhece.
+        created_at:
+          type: [string, 'null']
+          format: date-time
+        paid_at:
+          type: [string, 'null']
+          format: date-time
+        expired_at:
+          type: [string, 'null']
+          format: date-time
+        refunded_at:
+          type: [string, 'null']
+          format: date-time
+
+    Refund:
+      type: object
+      required: [object, id, status, amount, currency]
+      properties:
+        object:
+          type: string
+          const: refund
+        id:
+          type: string
+          example: rf_01k1y7c3n8b5w2q9r4t6y8u1i3
+        charge:
+          type: string
+          description: Código da cobrança estornada.
+        status:
+          $ref: '#/components/schemas/RefundStatus'
+        amount:
+          allOf:
+            - $ref: '#/components/schemas/Cents'
+          description: |
+            O que volta ao comprador, em centavos inteiros. Do ponto de
+            vista dele o estorno é sempre integral: a política de taxa
+            decide quem financia, nunca quanto ele recebe.
+        currency:
+          type: string
+          const: BRL
+        fee_returned:
+          allOf:
+            - $ref: '#/components/schemas/Cents'
+          description: |
+            Quanto da nossa taxa devolvemos, em centavos inteiros.
+        seller_debit:
+          allOf:
+            - $ref: '#/components/schemas/Cents'
+          description: |
+            O que efetivamente sai do saldo do vendedor, em centavos
+            inteiros. Sempre `amount - fee_returned`. Pode ser MAIOR que o
+            líquido recebido na venda, quando a política retém o custo que o
+            provedor não devolve.
+        reason:
+          type: [string, 'null']
+        failed_reason:
+          type: [string, 'null']
+          description: Preenchido quando `status` é `failed`.
+        created_at:
+          type: string
+          format: date-time
+        processed_at:
+          type: [string, 'null']
+          format: date-time
+
+    Balance:
+      type: object
+      required: [object, currency, balance, available, reserved, debt]
+      properties:
+        object:
+          type: string
+          const: balance
+        currency:
+          type: string
+          const: BRL
+        balance:
+          allOf:
+            - $ref: '#/components/schemas/Cents'
+          description: |
+            Saldo do extrato, em centavos inteiros. Pode ser NEGATIVO -
+            acontece quando um estorno chega depois do saque.
+        available:
+          allOf:
+            - $ref: '#/components/schemas/Cents'
+          description: |
+            O que já pode sair pelo nosso extrato, em centavos inteiros.
+            Nunca negativo: veja `debt`.
+        reserved:
+          allOf:
+            - $ref: '#/components/schemas/Cents'
+          description: |
+            Retido pela reserva rolante, em centavos inteiros. É dinheiro do
+            vendedor que ainda não pode sair - sem este campo, a diferença
+            entre `balance` e `available` pareceria erro do sistema.
+        debt:
+          allOf:
+            - $ref: '#/components/schemas/Cents'
+          description: |
+            Quanto o vendedor deve, em centavos inteiros. Estado próprio, e
+            não "saldo zero": as próximas vendas cobrem automaticamente e só
+            o saque fica bloqueado até lá.
+        withdrawable:
+          oneOf:
+            - $ref: '#/components/schemas/Cents'
+            - type: 'null'
+          description: |
+            O que dá para sacar AGORA, em centavos inteiros. `null` quando a
+            consulta ao provedor falhou.
+        provider:
+          oneOf:
+            - type: object
+              required: [available, waiting_funds]
+              properties:
+                available:
+                  allOf:
+                    - $ref: '#/components/schemas/Cents'
+                  description: Disponível na adquirente, em centavos inteiros.
+                waiting_funds:
+                  allOf:
+                    - $ref: '#/components/schemas/Cents'
+                  description: |
+                    A caminho na adquirente, em centavos inteiros.
+            - type: 'null'
+          description: |
+            `null` quando a consulta ao provedor falhou. Diferente de zero.
+
+    Pagination:
+      type: object
+      required: [page, per_page, total, total_pages, has_more]
+      properties:
+        page:
+          type: integer
+        per_page:
+          type: integer
+        total:
+          type: integer
+        total_pages:
+          type: integer
+        has_more:
+          type: boolean
+          description: Há página seguinte?
+
+    ChargeList:
+      type: object
+      required: [object, data, pagination]
+      properties:
+        object:
+          type: string
+          const: list
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Charge'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [type, code, message, details]
+          properties:
+            type:
+              type: string
+              description: |
+                Família do erro. Responde "de quem é o problema e o que
+                fazer": `invalid_request_error` se corrige mudando a
+                chamada, `authentication_error` trocando a chave, e
+                `api_error` é nosso - repita, não reescreva.
+              enum:
+                - authentication_error
+                - permission_error
+                - invalid_request_error
+                - idempotency_error
+                - not_found_error
+                - rate_limit_error
+                - api_error
+            code:
+              type: string
+              description: |
+                Código estável do erro. **Trate por ele.** A `message` pode
+                ser reescrita a qualquer momento; o código, não.
+            message:
+              type: string
+              description: Explicação em português, para leitura humana.
+            details:
+              type: object
+              description: |
+                Sempre objeto, mesmo vazio. Em `validation_failed`, traz os
+                campos recusados e suas mensagens.
+              additionalProperties: true
+
+    EventEnvelope:
+      type: object
+      required: [id, type, created_at, data]
+      properties:
+        id:
+          type: string
+          description: |
+            Identificador do evento. Estável entre as retentativas da mesma
+            entrega - use-o para deduplicar do seu lado.
+          example: evt_01k1y6r7z2m4n6p8q0r2s4t6u8
+        type:
+          type: string
+          enum: [charge.paid, charge.refunded, withdrawal.paid]
+        created_at:
+          type: string
+          format: date-time
+
+    ChargePaidEvent:
+      allOf:
+        - $ref: '#/components/schemas/EventEnvelope'
+        - type: object
+          properties:
+            data:
+              type: object
+              required: [charge]
+              properties:
+                charge:
+                  $ref: '#/components/schemas/Charge'
+
+    ChargeRefundedEvent:
+      allOf:
+        - $ref: '#/components/schemas/EventEnvelope'
+        - type: object
+          properties:
+            data:
+              type: object
+              required: [charge, refund]
+              properties:
+                charge:
+                  $ref: '#/components/schemas/Charge'
+                refund:
+                  $ref: '#/components/schemas/Refund'
+
+    WithdrawalPaidEvent:
+      allOf:
+        - $ref: '#/components/schemas/EventEnvelope'
+        - type: object
+          properties:
+            data:
+              type: object
+              required: [withdrawal]
+              properties:
+                withdrawal:
+                  type: object
+                  required: [object, id, status, amount, currency]
+                  properties:
+                    object:
+                      type: string
+                      const: withdrawal
+                    id:
+                      type: string
+                      example: wd_01k1y8d4h1g2f3e4d5c6b7a8z9
+                    status:
+                      type: string
+                      enum: [paid]
+                    currency:
+                      type: string
+                      const: BRL
+                    amount:
+                      allOf:
+                        - $ref: '#/components/schemas/Cents'
+                      description: Valor pedido, em centavos inteiros.
+                    fee:
+                      allOf:
+                        - $ref: '#/components/schemas/Cents'
+                      description: |
+                        Taxa da transferência, em centavos inteiros.
+                        Repasse puro do custo bancário.
+                    net_amount:
+                      allOf:
+                        - $ref: '#/components/schemas/Cents'
+                      description: |
+                        O que chegou na conta, em centavos inteiros
+                        (`amount - fee`).
+                    requested_at:
+                      type: string
+                      format: date-time
+                    processed_at:
+                      type: [string, 'null']
+                      format: date-time
+
+  examples:
+    ChargePendente:
+      summary: Cobrança criada, aguardando pagamento
+      value:
+        object: charge
+        id: ch_01k1y6r6m6q2x0p3d9v4t7c8n2
+        status: pending
+        payment_method: pix
+        amount: 10000
+        currency: BRL
+        platform_fee: 798
+        net_amount: 9202
+        refunded_amount: 0
+        description: Curso de Vue 3
+        reference: pedido-1042
+        customer:
+          name: João Comprador
+          email: joao@exemplo.com.br
+          document: '111.***.***-35'
+        pix:
+          qr_code: 00020101021226840014br.gov.bcb.pix2562qrcodepix.example.com/v2/abcd1234
+          expires_at: '2026-08-04T15:00:00+00:00'
+          end_2_end_id: null
+        created_at: '2026-08-04T14:00:00+00:00'
+        paid_at: null
+        expired_at: null
+        refunded_at: null
+
+    ChargePaga:
+      summary: Cobrança já paga
+      value:
+        object: charge
+        id: ch_01k1y6r6m6q2x0p3d9v4t7c8n2
+        status: paid
+        payment_method: pix
+        amount: 10000
+        currency: BRL
+        platform_fee: 798
+        net_amount: 9202
+        refunded_amount: 0
+        description: Curso de Vue 3
+        reference: pedido-1042
+        customer:
+          name: João Comprador
+          email: joao@exemplo.com.br
+          document: '111.***.***-35'
+        pix:
+          qr_code: 00020101021226840014br.gov.bcb.pix2562qrcodepix.example.com/v2/abcd1234
+          expires_at: '2026-08-04T15:00:00+00:00'
+          end_2_end_id: E12345678202608041200
+        created_at: '2026-08-04T14:00:00+00:00'
+        paid_at: '2026-08-04T14:03:11+00:00'
+        expired_at: null
+        refunded_at: null
+
+  responses:
+    BadRequest:
+      description: Requisição malformada.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            chaveLonga:
+              summary: idempotency_key_too_long
+              value:
+                error:
+                  type: invalid_request_error
+                  code: idempotency_key_too_long
+                  message: A chave de idempotência deve ter no máximo 255 caracteres.
+                  details: {}
+
+    Unauthorized:
+      description: |
+        Chave ausente, desconhecida, revogada ou expirada. A revogada é
+        distinguida da inexistente na MENSAGEM, nunca no status: quem
+        integra precisa saber que a chave existiu e foi desligada, e quem
+        está adivinhando tokens não aprende nada com isso.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            ausente:
+              summary: missing_api_key
+              value:
+                error:
+                  type: authentication_error
+                  code: missing_api_key
+                  message: 'Envie a chave em Authorization: Bearer sk_live_...'
+                  details: {}
+            invalida:
+              summary: invalid_api_key
+              value:
+                error:
+                  type: authentication_error
+                  code: invalid_api_key
+                  message: Chave de API inválida.
+                  details: {}
+            revogada:
+              summary: revoked_api_key
+              value:
+                error:
+                  type: authentication_error
+                  code: revoked_api_key
+                  message: Esta chave de API foi revogada. Gere uma nova em Desenvolvedores.
+                  details: {}
+            expirada:
+              summary: expired_api_key
+              value:
+                error:
+                  type: authentication_error
+                  code: expired_api_key
+                  message: Esta chave de API expirou. Gere uma nova em Desenvolvedores.
+                  details: {}
+
+    Forbidden:
+      description: |
+        A chave é válida, mas não tem o escopo do endpoint. `403` e não
+        `401` de propósito: `401` diria "sua chave está errada" a quem tem
+        a chave certa.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            escopo:
+              summary: insufficient_scope
+              value:
+                error:
+                  type: permission_error
+                  code: insufficient_scope
+                  message: 'Esta chave não tem o escopo [refunds:write].'
+                  details:
+                    required_ability: refunds:write
+                    abilities: [charges:read, charges:write]
+
+    NotFound:
+      description: |
+        O recurso não existe - ou é de outra conta, o que daqui dá no
+        mesmo. Não distinguimos os dois casos: responder "existe, mas não é
+        seu" confirmaria a existência de cobranças alheias a quem tentasse
+        adivinhar códigos.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            naoEncontrado:
+              value:
+                error:
+                  type: not_found_error
+                  code: resource_not_found
+                  message: Recurso não encontrado.
+                  details: {}
+
+    IdempotencyConflict:
+      description: Conflito de chave de idempotência.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            reusada:
+              summary: idempotency_key_reused
+              description: |
+                A chave já foi usada com outro corpo. Devolver a resposta
+                antiga faria você acreditar que cobrou o valor novo.
+              value:
+                error:
+                  type: idempotency_error
+                  code: idempotency_key_reused
+                  message: Esta chave de idempotência já foi usada com um corpo diferente. Use uma chave nova.
+                  details: {}
+            emAndamento:
+              summary: idempotency_key_in_progress
+              value:
+                error:
+                  type: idempotency_error
+                  code: idempotency_key_in_progress
+                  message: Uma requisição com esta chave ainda está em processamento. Tente novamente em instantes.
+                  details: {}
+
+    ValidationFailed:
+      description: Campos inválidos.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            validacao:
+              value:
+                error:
+                  type: invalid_request_error
+                  code: validation_failed
+                  message: Alguns campos não passaram na validação.
+                  details:
+                    amount:
+                      - O valor deve ser um inteiro em centavos (R$ 10,00 = 1000).
+
+    UnprocessableCharge:
+      description: |
+        A requisição está bem formada, mas foi recusada por uma regra de
+        negócio. Todos os `code` abaixo são estáveis.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            validacao:
+              summary: validation_failed
+              value:
+                error:
+                  type: invalid_request_error
+                  code: validation_failed
+                  message: Alguns campos não passaram na validação.
+                  details:
+                    customer.name:
+                      - O campo nome é obrigatório.
+            abaixoDoMinimo:
+              summary: amount_below_minimum
+              value:
+                error:
+                  type: invalid_request_error
+                  code: amount_below_minimum
+                  message: O valor está abaixo do mínimo permitido.
+                  details: {}
+            acimaDoMaximo:
+              summary: amount_above_maximum
+              value:
+                error:
+                  type: invalid_request_error
+                  code: amount_above_maximum
+                  message: O valor está acima do máximo permitido.
+                  details: {}
+            itens:
+              summary: items_do_not_match_amount
+              value:
+                error:
+                  type: invalid_request_error
+                  code: items_do_not_match_amount
+                  message: A soma dos itens deve ser igual ao valor da cobrança.
+                  details: {}
+            vendedor:
+              summary: seller_not_approved
+              description: |
+                O cadastro do vendedor não está aprovado para transacionar.
+                Nada na chamada resolve - o caminho é o painel.
+              value:
+                error:
+                  type: invalid_request_error
+                  code: seller_not_approved
+                  message: Este vendedor não pode transacionar no momento.
+                  details: {}
+            provedor:
+              summary: provider_rejected
+              description: |
+                O provedor recusou o conteúdo. A mensagem crua dele nunca
+                sai daqui - cita ids e endpoints que não existem no nosso
+                contrato.
+              value:
+                error:
+                  type: invalid_request_error
+                  code: provider_rejected
+                  message: O provedor de pagamento recusou esta cobrança. Confira os dados do comprador e do valor.
+                  details: {}
+
+    UnprocessableRefund:
+      description: O estorno foi recusado por uma regra de negócio.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            naoEstornavel:
+              summary: charge_not_refundable
+              value:
+                error:
+                  type: invalid_request_error
+                  code: charge_not_refundable
+                  message: Uma venda aguardando pagamento não pode ser estornada.
+                  details: {}
+            acimaDoRestante:
+              summary: exceeds_remaining
+              value:
+                error:
+                  type: invalid_request_error
+                  code: exceeds_remaining
+                  message: 'O valor pedido (R$ 200,00) é maior que o disponível para estorno (R$ 60,00).'
+                  details: {}
+            prazo:
+              summary: refund_window_closed
+              description: |
+                O prazo conta do PAGAMENTO, não da criação: uma cobrança que
+                ficou dias pendente antes de ser paga não chega com o prazo
+                já gasto.
+              value:
+                error:
+                  type: invalid_request_error
+                  code: refund_window_closed
+                  message: O prazo de 90 dias para estornar esta venda já passou.
+                  details: {}
+            desabilitado:
+              summary: refund_disabled
+              value:
+                error:
+                  type: invalid_request_error
+                  code: refund_disabled
+                  message: Estorno não está habilitado para esta conta. Fale com o suporte.
+                  details: {}
+
+    RateLimited:
+      description: |
+        Requisições demais.
+
+        Há três limites, por minuto: um por IP antes da autenticação, e
+        depois um de leitura e um de escrita, ambos por CHAVE - o excesso
+        de uma integração não consome a cota das outras do mesmo
+        vendedor. A escrita é bem mais apertada porque cada cobrança
+        criada vira uma chamada ao provedor.
+
+        `Retry-After` diz em quantos segundos voltar. Os cabeçalhos
+        `X-RateLimit-*` vêm em TODA resposta, não só nesta: são eles que
+        permitem desacelerar antes de bater no limite.
+      headers:
+        Retry-After:
+          description: Segundos até a cota ser reposta.
+          schema:
+            type: integer
+        X-RateLimit-Limit:
+          description: Requisições permitidas por minuto neste balde.
+          schema:
+            type: integer
+        X-RateLimit-Remaining:
+          description: Quantas ainda cabem no minuto corrente.
+          schema:
+            type: integer
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            cota:
+              summary: too_many_requests
+              value:
+                error:
+                  type: rate_limit_error
+                  code: too_many_requests
+                  message: Muitas requisições. Tente novamente em 42 segundos.
+                  details:
+                    retry_after: 42
+            provedor:
+              summary: provider_rate_limited
+              value:
+                error:
+                  type: rate_limit_error
+                  code: provider_rate_limited
+                  message: Limite de requisições do provedor atingido. Tente novamente em instantes.
+                  details: {}
+
+    InternalError:
+      description: |
+        Erro inesperado do nosso lado. Repita com a mesma
+        `Idempotency-Key` - ela é o que torna repetir seguro.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            interno:
+              value:
+                error:
+                  type: api_error
+                  code: internal_error
+                  message: Erro interno. Se persistir, informe o horário da chamada ao suporte.
+                  details: {}
+
+    ProviderUnavailable:
+      description: |
+        O provedor de pagamento não respondeu. **Repita com a mesma
+        `Idempotency-Key`**: pode ser que a cobrança tenha sido criada lá e
+        a resposta se perdido no caminho, e a mesma chave devolve a
+        cobrança em vez de criar outra.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            indisponivel:
+              value:
+                error:
+                  type: api_error
+                  code: provider_unavailable
+                  message: O provedor de pagamento não respondeu. Repita a requisição com a mesma Idempotency-Key.
+                  details: {}
+
+    PlatformUnavailable:
+      description: |
+        A plataforma não está apta a criar cobranças agora. É problema
+        nosso: nada que você mude na chamada resolve.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            indisponivel:
+              value:
+                error:
+                  type: api_error
+                  code: platform_unavailable
+                  message: A plataforma está temporariamente indisponível para criar cobranças. Tente novamente em instantes.
+                  details: {}

@@ -1,0 +1,9 @@
+| Limite | Valor | Onde aparece |
+| --- | --- | --- |
+| Validade de uma `Idempotency-Key` | 24 horas | [Idempotência](/essenciais/idempotencia) |
+| Tamanho da `Idempotency-Key` | 255 caracteres | `idempotency_key_too_long` |
+| Validade do QR (`expires_in`) | 60 s a 604.800 s (7 dias), padrão 3.600 s | [Ciclo de vida](/essenciais/ciclo-de-vida-da-cobranca) |
+| Itens por página (`per_page`) | 1 a 100, padrão 25 | [Conciliação](/receitas/conciliacao) |
+| Itens em uma cobrança | 100 | `POST /v1/charges` |
+| Janela de replay do webhook | 5 minutos | [Verificar a assinatura](/webhooks/assinatura) |
+| Prazo para estornar | 90 dias contados do **pagamento** | [Estornos](/essenciais/estornos) |

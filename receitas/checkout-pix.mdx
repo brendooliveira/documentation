@@ -1,0 +1,183 @@
+---
+title: "Checkout PIX de ponta a ponta"
+description: "Do pedido no seu sistema à liberação do produto, com webhook e uma rede de segurança."
+---
+
+import AvisoCentavos from "/snippets/aviso-centavos.mdx";
+import Suporte from "/snippets/suporte.mdx";
+
+O fluxo completo de uma venda, do jeito que ele sobrevive a rede instável e a comprador que fecha a
+aba.
+
+<AvisoCentavos />
+
+<Steps>
+
+<Step title="Crie a cobrança com a sua referência">
+
+Gere a `Idempotency-Key` **antes** da chamada e grave-a junto do pedido. Envie `reference` com o seu
+identificador — é o que permite reencontrar a cobrança depois sem guardar o `id` que devolvemos.
+
+<CodeGroup>
+
+```php PHP
+$pedido->update(['chave_idempotencia' => (string) Str::uuid()]);
+
+$resposta = Http::withToken(config('services.vext.key'))
+    ->withHeaders(['Idempotency-Key' => $pedido->chave_idempotencia])
+    ->post('https://api.vext.com.br/v1/charges', [
+        'amount' => $pedido->total_em_centavos,   // inteiro, sempre
+        'description' => $pedido->descricao,
+        'reference' => "pedido-{$pedido->id}",
+        'expires_in' => 1800,
+        'customer' => [
+            'name' => $pedido->cliente->nome,
+            'email' => $pedido->cliente->email,
+            'document' => $pedido->cliente->cpf,
+            'document_type' => 'CPF',
+        ],
+    ]);
+
+$cobranca = $resposta->json();
+$pedido->update(['cobranca_id' => $cobranca['id']]);
+```
+
+```javascript JavaScript
+pedido.chaveIdempotencia ??= crypto.randomUUID();
+await pedido.save();
+
+const resposta = await fetch('https://api.vext.com.br/v1/charges', {
+  method: 'POST',
+  headers: {
+    Authorization: `Bearer ${process.env.VEXT_API_KEY}`,
+    'Idempotency-Key': pedido.chaveIdempotencia,
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({
+    amount: pedido.totalEmCentavos, // inteiro, sempre
+    description: pedido.descricao,
+    reference: `pedido-${pedido.id}`,
+    expires_in: 1800,
+    customer: {
+      name: pedido.cliente.nome,
+      email: pedido.cliente.email,
+      document: pedido.cliente.cpf,
+      document_type: 'CPF',
+    },
+  }),
+});
+
+const cobranca = await resposta.json();
+pedido.cobrancaId = cobranca.id;
+```
+
+```python Python
+pedido.chave_idempotencia = pedido.chave_idempotencia or str(uuid.uuid4())
+pedido.save()
+
+resposta = requests.post(
+    "https://api.vext.com.br/v1/charges",
+    headers={
+        "Authorization": f"Bearer {os.environ['VEXT_API_KEY']}",
+        "Idempotency-Key": pedido.chave_idempotencia,
+    },
+    json={
+        "amount": pedido.total_em_centavos,  # inteiro, sempre
+        "description": pedido.descricao,
+        "reference": f"pedido-{pedido.id}",
+        "expires_in": 1800,
+        "customer": {
+            "name": pedido.cliente.nome,
+            "email": pedido.cliente.email,
+            "document": pedido.cliente.cpf,
+            "document_type": "CPF",
+        },
+    },
+)
+
+cobranca = resposta.json()
+pedido.cobranca_id = cobranca["id"]
+```
+
+</CodeGroup>
+
+A resposta vem com `status: "pending"`. O QR existe; ninguém pagou nada ainda.
+
+</Step>
+
+<Step title="Renderize o QR a partir do payload">
+
+A resposta traz `pix.qr_code`, o payload copia-e-cola. A **imagem** não é devolvida: ela é derivada
+do payload na hora de exibir, e mandar um PNG em base64 em toda resposta multiplicaria o corpo por
+algo que você gera localmente em milissegundos.
+
+Use qualquer biblioteca de QR code — `endroid/qr-code` em PHP, `qrcode` em Node, `qrcode` em Python.
+Mostre também o payload como texto, com um botão de copiar: muita gente paga colando no aplicativo
+do banco em vez de apontar a câmera.
+
+Exiba o vencimento a partir de `pix.expires_at`.
+
+</Step>
+
+<Step title="Aja no charge.paid, nunca antes">
+
+<Warning>
+  Não libere o produto na resposta de `POST /v1/charges`. Ela devolve `pending`. Liberar aí é
+  entregar para quem só gerou o QR e foi embora.
+</Warning>
+
+No seu endpoint de webhook: confira a assinatura, grave o evento, responda `200`, processe em fila.
+O passo a passo está em [Verificar a assinatura](/webhooks/assinatura) e
+[Entregas e retentativas](/webhooks/entregas-e-retentativas).
+
+```php Depois da assinatura conferida
+if ($evento['type'] === 'charge.paid') {
+    $cobranca = $evento['data']['charge'];
+    $pedido = Pedido::where('cobranca_id', $cobranca['id'])->firstOrFail();
+
+    $pedido->marcarComoPago($cobranca['paid_at']);
+    LiberarAcesso::dispatch($pedido);
+}
+```
+
+</Step>
+
+<Step title="Mantenha uma rede de segurança">
+
+Webhook é entrega pela rede, e rede falha. Se o seu endpoint ficou fora do ar durante as
+retentativas, o pedido fica pendente para sempre.
+
+Uma tarefa periódica que consulta as cobranças `pending` mais antigas que alguns minutos resolve:
+
+```bash
+curl "https://api.vext.com.br/v1/charges?status=pending&created_to=2026-08-04T14:00:00-03:00" \
+  -H "Authorization: Bearer sk_live_..."
+```
+
+Faça o polling **espaçado**, não em laço apertado — a cota de leitura é por chave, e gastá-la aqui
+deixa o resto da sua integração sem cota. Ver [Limites de requisição](/essenciais/limites-de-taxa).
+
+</Step>
+
+<Step title="Trate o que expira">
+
+Uma cobrança `expired` não pode ser paga nem estornada. Se o comprador voltar, crie **outra**
+cobrança, com uma `Idempotency-Key` nova — é uma tentativa nova de verdade, e reusar a chave antiga
+devolveria a cobrança vencida.
+
+</Step>
+
+</Steps>
+
+## Veja também
+
+<CardGroup cols={2}>
+  <Card title="Conciliação" icon="list-checks" href="/receitas/conciliacao">
+    Fechar o dia e casar tudo com os seus pedidos.
+  </Card>
+  <Card title="Ciclo de vida" icon="git-branch" href="/essenciais/ciclo-de-vida-da-cobranca">
+    Os sete estados e quando agir em cada um.
+  </Card>
+</CardGroup>
+
+<Suporte />

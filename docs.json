@@ -1,72 +1,136 @@
 {
   "$schema": "https://mintlify.com/docs.json",
   "theme": "mint",
-  "name": "Mintlify Starter Kit",
+  "name": "Vext",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#1A7A14",
+    "light": "#4FFC46",
+    "dark": "#14640F"
   },
   "favicon": "/favicon.svg",
-  "navigation": {
-    "pages": [
-      {
-        "group": "Getting Started",
-        "pages": [
-          "index",
-          "quickstart"
-        ]
-      }
-    ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
-        },
-        {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
-        }
-      ]
-    }
-  },
   "logo": {
     "light": "/logo/light.svg",
     "dark": "/logo/dark.svg"
   },
+  "appearance": {
+    "default": "system"
+  },
+  "search": {
+    "prompt": "Buscar na documentação da Vext"
+  },
+  "api": {
+    "playground": {
+      "display": "interactive"
+    },
+    "examples": {
+      "languages": ["curl", "php", "javascript", "python"],
+      "defaults": "required"
+    }
+  },
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Guias",
+        "groups": [
+          {
+            "group": "Começar",
+            "icon": "rocket",
+            "pages": ["index", "quickstart"]
+          },
+          {
+            "group": "Essenciais",
+            "icon": "book-open",
+            "pages": [
+              "essenciais/valores-em-centavos",
+              "essenciais/autenticacao",
+              "essenciais/idempotencia",
+              "essenciais/erros",
+              "essenciais/limites-de-taxa",
+              "essenciais/ciclo-de-vida-da-cobranca",
+              "essenciais/estornos",
+              "essenciais/saldo"
+            ]
+          },
+          {
+            "group": "Webhooks",
+            "icon": "webhook",
+            "pages": [
+              "webhooks/visao-geral",
+              "webhooks/assinatura",
+              "webhooks/entregas-e-retentativas"
+            ]
+          },
+          {
+            "group": "Receitas",
+            "icon": "list-checks",
+            "pages": [
+              "receitas/checkout-pix",
+              "receitas/conciliacao",
+              "receitas/repetir-com-seguranca",
+              "receitas/estorno-parcial"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Referência da API",
+        "groups": [
+          {
+            "group": "Visão geral",
+            "pages": ["api-reference/introducao"]
+          },
+          {
+            "group": "Cobranças",
+            "pages": [
+              "api-reference/cobrancas/criar",
+              "api-reference/cobrancas/listar",
+              "api-reference/cobrancas/consultar",
+              "api-reference/cobrancas/estornar"
+            ]
+          },
+          {
+            "group": "Saldo",
+            "pages": ["api-reference/saldo/consultar"]
+          },
+          {
+            "group": "Eventos de webhook",
+            "pages": [
+              "api-reference/webhooks/charge-paid",
+              "api-reference/webhooks/charge-refunded",
+              "api-reference/webhooks/withdrawal-paid"
+            ]
+          }
+        ]
+      }
+    ]
+  },
   "navbar": {
     "links": [
       {
-        "label": "Support",
-        "href": "mailto:hi@mintlify.com"
+        "label": "Suporte",
+        "href": "mailto:suporte@vext.com.br"
       }
-    ],
-    "primary": {
-      "type": "button",
-      "label": "Dashboard",
-      "href": "https://app.mintlify.com"
-    }
-  },
-  "contextual": {
-    "options": [
-      "copy",
-      "view",
-      "chatgpt",
-      "claude",
-      "perplexity",
-      "mcp",
-      "cursor",
-      "vscode"
     ]
   },
   "footer": {
-    "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
-    }
+    "links": [
+      {
+        "header": "Documentação",
+        "items": [
+          { "label": "Primeira cobrança", "href": "/quickstart" },
+          { "label": "Referência da API", "href": "/api-reference/introducao" },
+          { "label": "Webhooks", "href": "/webhooks/visao-geral" }
+        ]
+      },
+      {
+        "header": "Vext",
+        "items": [
+          { "label": "Suporte", "href": "mailto:suporte@vext.com.br" }
+        ]
+      }
+    ]
+  },
+  "contextual": {
+    "options": ["copy", "view", "claude", "chatgpt", "mcp"]
   }
 }

@@ -1,0 +1,10 @@
+---
+title: "Consultar cobrança"
+description: "Busca uma cobrança pelo código público ch_…."
+openapi: "/api-reference/openapi.yaml GET /v1/charges/{code}"
+---
+
+<Note>
+  O `404` não distingue "não existe" de "existe, mas é de outra conta". Responder a diferença
+  confirmaria a existência de cobranças alheias a quem tentasse adivinhar códigos.
+</Note>

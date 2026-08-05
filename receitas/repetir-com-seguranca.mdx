@@ -1,0 +1,160 @@
+---
+title: "Repetir requisições com segurança"
+description: "Quais códigos merecem retry, com que espera, e sempre com a mesma Idempotency-Key."
+---
+
+import Suporte from "/snippets/suporte.mdx";
+
+Repetir uma chamada que cria dinheiro só é seguro com `Idempotency-Key`. Esta receita assume que
+você já a envia — se não, comece por [Idempotência](/essenciais/idempotencia).
+
+## A matriz
+
+| Situação | Repetir? | Como |
+| --- | --- | --- |
+| Timeout, conexão caiu | **Sim** | Mesma chave, imediatamente |
+| `429 too_many_requests` | **Sim** | Espere o `Retry-After` |
+| `429 provider_rate_limited` | **Sim** | Backoff exponencial |
+| `500 internal_error` | **Sim** | Mesma chave, backoff |
+| `502 provider_unavailable` | **Sim** | Mesma chave, backoff |
+| `503 platform_unavailable` | **Sim** | Mesma chave, backoff |
+| `409 idempotency_key_in_progress` | **Sim** | A primeira ainda está em voo. Espere alguns segundos |
+| `409 idempotency_key_reused` | Não | Corpo diferente. Use uma chave nova |
+| `400`, `422` | Não | Corrija a chamada. Repetir igual dá o mesmo erro |
+| `401`, `403` | Não | Troque a chave ou o escopo |
+| `404` | Não | Confira o código do recurso |
+
+A regra por trás dela: repita quando o `type` for `api_error` ou `rate_limit_error`. Não repita
+quando for `invalid_request_error`, `authentication_error`, `permission_error` ou `not_found_error`.
+
+## O caso que justifica tudo
+
+`502 provider_unavailable` é o motivo de a `Idempotency-Key` existir.
+
+O provedor não respondeu. Pode ser que a cobrança tenha sido criada lá e a resposta se perdido no
+caminho — você não tem como saber. Repetir sem chave criaria a segunda cobrança. Com a mesma chave,
+você recebe a primeira, com `Idempotent-Replayed: true`.
+
+<Warning>
+  Nunca gere uma chave nova ao repetir. É o erro que transforma uma indisponibilidade momentânea do
+  provedor em uma cobrança duplicada no cartão do comprador.
+</Warning>
+
+## Backoff exponencial
+
+<CodeGroup>
+
+```php PHP
+$chave = $pedido->chave_idempotencia;      // gerada uma vez, antes da primeira tentativa
+$repetiveis = [408, 409, 429, 500, 502, 503];
+
+for ($tentativa = 0; $tentativa < 5; $tentativa++) {
+    $resposta = Http::withToken(config('services.vext.key'))
+        ->withHeaders(['Idempotency-Key' => $chave])
+        ->post('https://api.vext.com.br/v1/charges', $corpo);
+
+    if ($resposta->successful()) {
+        return $resposta->json();
+    }
+
+    $codigo = $resposta->json('error.code');
+
+    if (! in_array($resposta->status(), $repetiveis, true) || $codigo === 'idempotency_key_reused') {
+        throw new CobrancaRecusada($codigo, $resposta->json('error.details'));
+    }
+
+    // Honre o Retry-After quando ele vier; senão, dobre a espera.
+    $espera = (int) ($resposta->header('Retry-After') ?: 2 ** $tentativa);
+    sleep(min($espera, 60));
+}
+
+throw new CobrancaIndisponivel($chave);
+```
+
+```javascript JavaScript
+const chave = pedido.chaveIdempotencia; // gerada uma vez, antes da primeira tentativa
+const repetiveis = [408, 409, 429, 500, 502, 503];
+
+for (let tentativa = 0; tentativa < 5; tentativa++) {
+  const resposta = await fetch('https://api.vext.com.br/v1/charges', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${process.env.VEXT_API_KEY}`,
+      'Idempotency-Key': chave,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(corpo),
+  });
+
+  if (resposta.ok) return resposta.json();
+
+  const { error } = await resposta.json();
+
+  if (!repetiveis.includes(resposta.status) || error.code === 'idempotency_key_reused') {
+    throw new CobrancaRecusada(error.code, error.details);
+  }
+
+  // Honre o Retry-After quando ele vier; senão, dobre a espera.
+  const espera = Number(resposta.headers.get('Retry-After')) || 2 ** tentativa;
+  await new Promise((r) => setTimeout(r, Math.min(espera, 60) * 1000));
+}
+
+throw new CobrancaIndisponivel(chave);
+```
+
+```python Python
+chave = pedido.chave_idempotencia  # gerada uma vez, antes da primeira tentativa
+REPETIVEIS = {408, 409, 429, 500, 502, 503}
+
+for tentativa in range(5):
+    resposta = requests.post(
+        "https://api.vext.com.br/v1/charges",
+        headers={
+            "Authorization": f"Bearer {os.environ['VEXT_API_KEY']}",
+            "Idempotency-Key": chave,
+        },
+        json=corpo,
+    )
+
+    if resposta.ok:
+        return resposta.json()
+
+    erro = resposta.json()["error"]
+
+    if resposta.status_code not in REPETIVEIS or erro["code"] == "idempotency_key_reused":
+        raise CobrancaRecusada(erro["code"], erro["details"])
+
+    # Honre o Retry-After quando ele vier; senão, dobre a espera.
+    espera = int(resposta.headers.get("Retry-After") or 2**tentativa)
+    time.sleep(min(espera, 60))
+
+raise CobrancaIndisponivel(chave)
+```
+
+</CodeGroup>
+
+## Quando desistir
+
+Cinco tentativas é um teto razoável para uma chamada síncrona, com o comprador esperando na tela.
+Depois disso, mostre uma mensagem honesta e mande o pedido para uma fila de retentativa mais lenta —
+a `Idempotency-Key` continua válida por **24 horas**, e é ela que torna a retomada segura horas
+depois.
+
+## O que registrar
+
+Em cada tentativa que falhou, registre `code`, `type`, o status HTTP, a `Idempotency-Key` e o
+horário. Sem a chave e o horário no log não há como sabermos qual requisição foi a sua quando você
+abrir um chamado.
+
+## Veja também
+
+<CardGroup cols={2}>
+  <Card title="Idempotência" icon="repeat" href="/essenciais/idempotencia">
+    Como a chave funciona e o que serve de chave.
+  </Card>
+  <Card title="Erros" icon="triangle-alert" href="/essenciais/erros">
+    O catálogo completo de códigos.
+  </Card>
+</CardGroup>
+
+<Suporte />

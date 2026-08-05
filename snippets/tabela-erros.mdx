@@ -1,0 +1,26 @@
+| `code` | HTTP | `type` | O que fazer |
+| --- | --- | --- | --- |
+| `missing_api_key` | 401 | `authentication_error` | Envie `Authorization: Bearer sk_…` |
+| `invalid_api_key` | 401 | `authentication_error` | Confira se copiou a chave inteira e o ambiente certo |
+| `revoked_api_key` | 401 | `authentication_error` | A chave existiu e foi desligada. Gere outra em **Desenvolvedores** |
+| `expired_api_key` | 401 | `authentication_error` | Gere outra em **Desenvolvedores** |
+| `insufficient_scope` | 403 | `permission_error` | A chave é válida, falta o escopo. `details.required_ability` diz qual |
+| `resource_not_found` | 404 | `not_found_error` | O recurso não existe — ou é de outra conta |
+| `idempotency_key_too_long` | 400 | `invalid_request_error` | Encurte a chave para 255 caracteres |
+| `idempotency_key_reused` | 409 | `idempotency_error` | A chave já foi usada com outro corpo. Use uma chave nova |
+| `idempotency_key_in_progress` | 409 | `idempotency_error` | A primeira ainda está em voo. Repita em instantes |
+| `validation_failed` | 422 | `invalid_request_error` | `details` traz campo → mensagens. Corrija e reenvie |
+| `amount_below_minimum` | 422 | `invalid_request_error` | Valor abaixo do mínimo permitido |
+| `amount_above_maximum` | 422 | `invalid_request_error` | Valor acima do máximo permitido |
+| `items_do_not_match_amount` | 422 | `invalid_request_error` | A soma de `quantity * amount` dos itens tem que bater com `amount` |
+| `seller_not_approved` | 422 | `invalid_request_error` | Nada na chamada resolve. O caminho é o painel |
+| `provider_rejected` | 422 | `invalid_request_error` | Confira os dados do comprador e o valor |
+| `charge_not_refundable` | 422 | `invalid_request_error` | Só cobrança paga é estornável |
+| `exceeds_remaining` | 422 | `invalid_request_error` | Peça no máximo o saldo estornável, ou omita `amount` |
+| `refund_window_closed` | 422 | `invalid_request_error` | Passaram-se 90 dias desde o pagamento. Não há retentativa |
+| `refund_disabled` | 422 | `invalid_request_error` | Estorno não habilitado para a conta. Fale com o suporte |
+| `too_many_requests` | 429 | `rate_limit_error` | Espere o `Retry-After` e repita |
+| `provider_rate_limited` | 429 | `rate_limit_error` | Limite do provedor. Repita com backoff |
+| `internal_error` | 500 | `api_error` | Repita **com a mesma `Idempotency-Key`** |
+| `provider_unavailable` | 502 | `api_error` | Repita **com a mesma `Idempotency-Key`** — a cobrança pode ter sido criada |
+| `platform_unavailable` | 503 | `api_error` | É problema nosso. Repita depois; nada na chamada resolve |

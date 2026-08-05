@@ -1,0 +1,23 @@
+**Você envia**
+
+| Header | Quando | Para quê |
+| --- | --- | --- |
+| `Authorization: Bearer sk_…` | Sempre | Autentica a chamada |
+| `Idempotency-Key` | Em todo `POST` | Torna seguro repetir depois de um erro de rede |
+
+**Você recebe**
+
+| Header | Quando | Significa |
+| --- | --- | --- |
+| `Idempotent-Replayed: true` | Replay de idempotência | O corpo é uma resposta gravada; nada foi criado agora |
+| `X-RateLimit-Limit` | Toda resposta | Requisições permitidas por minuto neste balde |
+| `X-RateLimit-Remaining` | Toda resposta | Quantas ainda cabem no minuto corrente |
+| `Retry-After` | Em `429` | Segundos até a cota ser reposta |
+
+**Nós enviamos, nos webhooks**
+
+| Header | Significa |
+| --- | --- |
+| `X-Vext-Signature` | `t=<timestamp>,v1=<hmac>` — confira antes de agir |
+| `X-Vext-Event` | Tipo do evento, fora do corpo, para filtrar no log sem desserializar |
+| `X-Vext-Delivery` | Identificador da entrega — cite-o ao abrir um chamado |

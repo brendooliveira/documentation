@@ -1,0 +1,79 @@
+---
+title: "Visão geral dos webhooks"
+description: "Os três eventos que enviamos, como cadastrar endpoints e o que responder."
+---
+
+import Suporte from "/snippets/suporte.mdx";
+
+Webhooks são as chamadas que **nós** fazemos para o seu sistema quando algo acontece. É por eles que
+você descobre que um PIX foi pago sem ficar perguntando.
+
+| Evento | Quando dispara | O que vem em `data` |
+| --- | --- | --- |
+| [`charge.paid`](/api-reference/webhooks/charge-paid) | O PIX é confirmado | `charge` |
+| [`charge.refunded`](/api-reference/webhooks/charge-refunded) | Um estorno é concluído | `charge` e `refund` |
+| [`withdrawal.paid`](/api-reference/webhooks/withdrawal-paid) | O saque cai na conta do vendedor | `withdrawal` |
+
+`charge.paid` é o evento sobre o qual o seu sistema deve agir: liberar acesso, faturar, dar baixa no
+pedido.
+
+## Cadastro
+
+Você cadastra vários endpoints em **Desenvolvedores**. Produção e homologação são sistemas
+diferentes, e cada um recebe só os eventos que assinou, com o **seu próprio segredo de assinatura**.
+
+Um segredo por endpoint significa que o segredo de homologação vazado não permite forjar eventos em
+produção.
+
+## O envelope
+
+Todo evento tem a mesma forma:
+
+```json
+{
+  "id": "evt_01k1y6r7z2m4n6p8q0r2s4t6u8",
+  "type": "charge.paid",
+  "created_at": "2026-08-04T14:03:12+00:00",
+  "data": {
+    "charge": { "object": "charge", "id": "ch_01k1y6r6m6q2x0p3d9v4t7c8n2", "status": "paid" }
+  }
+}
+```
+
+E três headers:
+
+| Header | Para quê |
+| --- | --- |
+| `X-Vext-Signature` | `t=<timestamp>,v1=<hmac>`. **Confira antes de agir** |
+| `X-Vext-Event` | O tipo, repetido fora do corpo — permite filtrar no seu log sem desserializar nada |
+| `X-Vext-Delivery` | Identificador da entrega. Cite-o ao abrir um chamado |
+
+## Uma entrega por fato
+
+Cada fato vira no máximo **uma** entrega por endpoint. Uma reentrega do provedor para nós não vira
+uma segunda entrega para você.
+
+Uma entrega que desistiu depois das retentativas pode ser reenviada à mão pelo painel — e aí o `id`
+do evento é o **mesmo**, para a sua idempotência reconhecê-lo.
+
+## O que responder
+
+Qualquer `2xx` encerra a entrega. Qualquer coisa fora dessa faixa agenda nova tentativa.
+
+<Warning>
+  Responda rápido e processe depois. Demorar vira retentativa, e retentativa em fluxo de dinheiro é
+  como um pagamento acaba contabilizado duas vezes. Grave o evento, responda `200`, processe em fila.
+</Warning>
+
+## Veja também
+
+<CardGroup cols={2}>
+  <Card title="Verificar a assinatura" icon="shield-check" href="/webhooks/assinatura">
+    O passo que não dá para pular.
+  </Card>
+  <Card title="Entregas e retentativas" icon="repeat" href="/webhooks/entregas-e-retentativas">
+    Como deduplicar pelo `id` do evento.
+  </Card>
+</CardGroup>
+
+<Suporte />

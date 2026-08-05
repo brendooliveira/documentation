@@ -1,0 +1,11 @@
+---
+title: "Consultar saldo"
+description: "Saldo, reservado, disponível e sacável do vendedor."
+openapi: "/api-reference/openapi.yaml GET /v1/balance"
+---
+
+<Warning>
+  `provider` e `withdrawable` vêm `null` quando a consulta ao provedor falha. **`null` não é zero**:
+  zero diria que não há dinheiro, quando o que houve foi uma consulta que não respondeu.
+  Ver [Saldo do vendedor](/essenciais/saldo).
+</Warning>

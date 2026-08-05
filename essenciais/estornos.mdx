@@ -1,0 +1,108 @@
+---
+title: "Estornos"
+description: "Por que saem R$ 93,01 do vendedor quando você estorna R$ 100,00, e por que estorno nunca é barrado por falta de saldo."
+---
+
+import Suporte from "/snippets/suporte.mdx";
+
+Estornar devolve o dinheiro ao comprador, no todo ou em parte.
+
+```bash Estorno parcial de R$ 40,00
+curl -X POST https://api.vext.com.br/v1/charges/ch_01k1y6r6m6q2x0p3d9v4t7c8n2/refund \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Idempotency-Key: estorno-pedido-1042" \
+  -H "Content-Type: application/json" \
+  -d '{"amount": 4000, "reason": "Devolução de um item"}'
+```
+
+<Warning>
+  Omitir `amount` devolve **o que ainda cabe estornar** — e não o valor da venda. Numa cobrança já
+  devolvida pela metade, mandar o valor cheio de volta tiraria o dinheiro duas vezes do vendedor.
+</Warning>
+
+## Três números, três perguntas
+
+Esta é a parte que gera chamado no suporte: você estorna R\$ 100,00 e vê R\$ 93,01 saírem do vendedor.
+Não é erro. Os campos vêm separados justamente para responder isso sem precisar perguntar.
+
+```json Estorno integral de uma venda de R$ 100,00
+{
+  "object": "refund",
+  "id": "rf_01k1y7c3n8b5w2q9r4t6y8u1i3",
+  "charge": "ch_01k1y6r6m6q2x0p3d9v4t7c8n2",
+  "status": "succeeded",
+  "amount": 10000,
+  "currency": "BRL",
+  "fee_returned": 699,
+  "seller_debit": 9301,
+  "reason": "Comprador desistiu",
+  "failed_reason": null,
+  "created_at": "2026-08-05T10:12:00+00:00",
+  "processed_at": "2026-08-05T10:12:02+00:00"
+}
+```
+
+| Campo | Responde | No exemplo |
+| --- | --- | --- |
+| `amount` | Quanto o **comprador** recebe de volta | `10000` (R\$ 100,00) |
+| `fee_returned` | Quanto da **nossa taxa** devolvemos | `699` (R\$ 6,99) |
+| `seller_debit` | Quanto sai do saldo do **vendedor** | `9301` (R\$ 93,01) |
+
+Sempre `amount = seller_debit + fee_returned`.
+
+Do ponto de vista do comprador o estorno é sempre integral: a política de taxa decide quem financia,
+nunca quanto ele recebe.
+
+<Note>
+  `seller_debit` pode ser **maior** que o líquido que o vendedor recebeu na venda, quando a política
+  retém o custo que o provedor não devolve. Nesse caso o vendedor paga a diferença — o dinheiro do
+  comprador volta inteiro de qualquer forma.
+</Note>
+
+## Estorno não é barrado por falta de saldo
+
+O dinheiro é do comprador e precisa voltar. Não checamos o saldo do vendedor antes.
+
+Se ele já sacou, o saldo fica negativo e as vendas seguintes cobrem automaticamente. Enquanto isso,
+só o saque fica bloqueado — nada mais para. Ver [Saldo do vendedor](/essenciais/saldo).
+
+## Estornos parciais somam
+
+`refunded_amount` na cobrança acumula entre estornos. O que ainda cabe estornar é
+`amount - refunded_amount`, e pedir mais que isso devolve `422 exceeds_remaining`.
+
+Depois do primeiro estorno parcial a cobrança fica `partially_refunded`. Ela só vira `refunded`
+quando o total devolvido alcança o valor da venda.
+
+## Quando o estorno é recusado
+
+| `code` | Por quê |
+| --- | --- |
+| `charge_not_refundable` | A cobrança não está paga. Uma venda aguardando pagamento não tem o que devolver |
+| `exceeds_remaining` | Você pediu mais do que ainda cabe estornar |
+| `refund_window_closed` | Passaram-se 90 dias **do pagamento** |
+| `refund_disabled` | Estorno não habilitado para a conta. Fale com o suporte |
+
+O prazo conta do **pagamento**, não da criação. Uma cobrança que ficou dias pendente antes de ser
+paga não chega com o prazo já gasto.
+
+## `status: failed` não é lixo
+
+`failed` significa que a devolução **não** aconteceu e o saldo do vendedor foi reposto. O motivo
+está em `failed_reason`.
+
+A linha permanece de propósito: uma tentativa de devolver dinheiro que não deu certo é exatamente o
+que alguém vai procurar depois — no atendimento ao comprador que ligou perguntando pelo estorno.
+
+## Veja também
+
+<CardGroup cols={2}>
+  <Card title="Estorno parcial" icon="rotate-ccw" href="/receitas/estorno-parcial">
+    A receita completa, com o webhook que chega depois.
+  </Card>
+  <Card title="Saldo do vendedor" icon="wallet" href="/essenciais/saldo">
+    O que acontece com o saldo quando ele fica negativo.
+  </Card>
+</CardGroup>
+
+<Suporte />

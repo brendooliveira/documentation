@@ -1,0 +1,13 @@
+---
+title: "charge.paid"
+description: "Enviado quando o PIX é confirmado. É o evento sobre o qual o seu sistema deve agir."
+openapi: "/api-reference/openapi.yaml webhook charge.paid"
+---
+
+<Warning>
+  **Confira a assinatura antes de agir.** Quem tem o segredo consegue forjar este evento, e um
+  sistema que libera produto ao recebê-lo entregaria de graça.
+  Ver [Verificar a assinatura](/webhooks/assinatura).
+</Warning>
+
+É aqui que você libera acesso, fatura ou dá baixa no pedido.

@@ -1,0 +1,128 @@
+---
+title: "Valores em centavos"
+description: "Todo dinheiro nesta API é inteiro em centavos. Decimal é recusado com 422, e a recusa é deliberada."
+---
+
+import Suporte from "/snippets/suporte.mdx";
+
+Não há exceção. `amount`, `platform_fee`, `net_amount`, `refunded_amount`, `fee_returned`,
+`seller_debit`, `balance`, `available`, `reserved`, `debt` e `withdrawable` são inteiros em centavos
+de real.
+
+| Valor | Envie / receba |
+| --- | --- |
+| R\$ 1,00 | `100` |
+| R\$ 10,50 | `1050` |
+| R\$ 1.234,56 | `123456` |
+
+```json Criar uma cobrança de R$ 100,00
+{
+  "amount": 10000,
+  "description": "Curso de Vue 3",
+  "customer": { "name": "João Comprador" }
+}
+```
+
+## Por que decimal é recusado
+
+Enviar `10.50` devolve `422`. Não convertemos por você, e não é rigor decorativo.
+
+Um decimal chega ao servidor como ponto flutuante. Ponto flutuante binário não representa a maioria
+dos valores decimais exatamente, e a multiplicação por 100 herda o erro. Os números abaixo são reais
+— o resultado é o mesmo em PHP, JavaScript e Python, porque os três usam IEEE 754 de 64 bits:
+
+| Você quis dizer | `valor * 100` | Truncado para inteiro |
+| --- | --- | --- |
+| R\$ 19,99 | `1998.9999999999998` | `1998` |
+| R\$ 8,20 | `819.9999999999999` | `819` |
+| R\$ 0,29 | `28.999999999999996` | `28` |
+
+Um centavo a menos em cada venda não derruba nada no dia. Ele aparece na conciliação do mês, como
+uma diferença que não fecha e que ninguém sabe de onde veio. Diante de um decimal preferimos recusar
+a adivinhar a intenção — com dinheiro, adivinhar sai caro.
+
+## Como converter sem errar
+
+A regra que resolve o problema na origem: **não deixe o valor virar `float`**. Se ele já é um
+decimal na sua mão, arredonde explicitamente em vez de truncar.
+
+<CodeGroup>
+
+```php PHP
+// Errado: o cast trunca o erro do float para baixo.
+$centavos = (int) ($valor * 100);        // 19.99 vira 1998
+
+// Certo: arredonda antes de truncar.
+$centavos = (int) round($valor * 100);   // 19.99 vira 1999
+
+// Melhor: nunca passe pelo float.
+$centavos = (int) bcmul((string) $valor, '100');
+```
+
+```javascript JavaScript
+// Errado: Math.trunc e o bitwise | 0 truncam o erro para baixo.
+const centavos = Math.trunc(valor * 100);   // 19.99 vira 1998
+
+// Certo: arredonda antes de truncar.
+const centavos = Math.round(valor * 100);   // 19.99 vira 1999
+
+// Melhor: guarde centavos como inteiro desde o formulário e nunca multiplique.
+```
+
+```python Python
+# Errado: int() trunca o erro do float para baixo.
+centavos = int(valor * 100)              # 19.99 vira 1998
+
+# Certo: arredonda antes de truncar.
+centavos = round(valor * 100)            # 19.99 vira 1999
+
+# Melhor: Decimal não passa por binário.
+from decimal import Decimal
+centavos = int(Decimal(str(valor)) * 100)
+```
+
+</CodeGroup>
+
+Para exibir ao comprador, faça o caminho inverso só na hora de renderizar — divida por 100 na
+camada de apresentação e mantenha o inteiro em todo o resto do sistema.
+
+## O que dá errado
+
+| `code` | HTTP | Quando |
+| --- | --- | --- |
+| `validation_failed` | 422 | Você enviou um decimal, uma string ou um valor negativo. `details.amount` traz a mensagem |
+| `amount_below_minimum` | 422 | O valor é inteiro e válido, mas está abaixo do mínimo da conta |
+| `amount_above_maximum` | 422 | Acima do máximo da conta |
+| `items_do_not_match_amount` | 422 | A soma de `quantity * amount` dos itens não bate com `amount` |
+
+```json validation_failed
+{
+  "error": {
+    "type": "invalid_request_error",
+    "code": "validation_failed",
+    "message": "Alguns campos não passaram na validação.",
+    "details": {
+      "amount": ["O valor deve ser um inteiro em centavos (R$ 10,00 = 1000)."]
+    }
+  }
+}
+```
+
+<Note>
+  Enviar `items` não dispensa `amount`. A soma de `quantity * amount` de todos os itens precisa bater
+  exatamente com o `amount` da cobrança — sem essa conferência, o comprador veria um total diferente
+  da soma do que está levando.
+</Note>
+
+## Veja também
+
+<CardGroup cols={2}>
+  <Card title="Erros" icon="triangle-alert" href="/essenciais/erros">
+    O catálogo completo de códigos e o que fazer em cada um.
+  </Card>
+  <Card title="Estornos" icon="rotate-ccw" href="/essenciais/estornos">
+    A aritmética de `amount`, `fee_returned` e `seller_debit`.
+  </Card>
+</CardGroup>
+
+<Suporte />

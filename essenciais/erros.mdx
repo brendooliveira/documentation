@@ -1,0 +1,131 @@
+---
+title: "Erros"
+description: "Um envelope único, sete famílias de tipo e o catálogo estável de códigos."
+---
+
+import TabelaErros from "/snippets/tabela-erros.mdx";
+import Suporte from "/snippets/suporte.mdx";
+
+Todo erro — inclusive os que não previmos — tem a mesma forma:
+
+```json
+{
+  "error": {
+    "type": "invalid_request_error",
+    "code": "amount_below_minimum",
+    "message": "O valor está abaixo do mínimo permitido.",
+    "details": {}
+  }
+}
+```
+
+<Warning>
+  Trate pelo `code`, nunca pela `message`. O código é contrato; o texto pode ser reescrito a qualquer
+  momento, e um `if` que compara a mensagem quebra silenciosamente na primeira vez que a melhorarmos.
+</Warning>
+
+## As sete famílias
+
+O `type` responde de quem é o problema e o que fazer. É por ele que você decide o comportamento;
+o `code` diz qual mensagem mostrar.
+
+| `type` | De quem é | O que fazer |
+| --- | --- | --- |
+| `authentication_error` | Sua chave | Troque a chave. Não repita |
+| `permission_error` | Seu escopo | Gere uma chave com o escopo certo. Não repita |
+| `invalid_request_error` | Sua chamada | Corrija os dados. Repetir igual dá o mesmo erro |
+| `idempotency_error` | Sua chave de idempotência | Chave nova, ou repita em instantes |
+| `not_found_error` | O recurso | Confira o código. Não repita |
+| `rate_limit_error` | Ritmo | Espere o `Retry-After` e repita |
+| `api_error` | **Nosso** | Repita com a mesma `Idempotency-Key`. Não reescreva a chamada |
+
+A divisão que importa na prática: `invalid_request_error` se corrige mudando a chamada,
+`authentication_error` trocando a chave, e `api_error` é nosso — repita, não reescreva.
+
+## `details`
+
+`details` é sempre objeto, mesmo vazio. Em `validation_failed`, ele traz os campos recusados e as
+mensagens de cada um:
+
+```json
+{
+  "error": {
+    "type": "invalid_request_error",
+    "code": "validation_failed",
+    "message": "Alguns campos não passaram na validação.",
+    "details": {
+      "amount": ["O valor deve ser um inteiro em centavos (R$ 10,00 = 1000)."],
+      "customer.name": ["O campo nome é obrigatório."]
+    }
+  }
+}
+```
+
+Em `insufficient_scope`, ele traz `required_ability` e a lista de `abilities` que a chave tem.
+
+## Catálogo de códigos
+
+Todos são estáveis. Se um código novo aparecer, ele entra nesta tabela — nenhum destes muda de
+significado.
+
+<TabelaErros />
+
+## Tratando na prática
+
+<CodeGroup>
+
+```php PHP
+$erro = $resposta->json('error');
+
+match ($erro['type']) {
+    'api_error', 'rate_limit_error' => $this->repetir($chaveIdempotencia),
+    'authentication_error', 'permission_error' => $this->alertarOperacao($erro['code']),
+    default => $this->registrarFalhaDoPedido($erro['code'], $erro['details']),
+};
+```
+
+```javascript JavaScript
+const { error } = await resposta.json();
+
+switch (error.type) {
+  case 'api_error':
+  case 'rate_limit_error':
+    return repetir(chaveIdempotencia);
+  case 'authentication_error':
+  case 'permission_error':
+    return alertarOperacao(error.code);
+  default:
+    return registrarFalhaDoPedido(error.code, error.details);
+}
+```
+
+```python Python
+erro = resposta.json()["error"]
+
+if erro["type"] in ("api_error", "rate_limit_error"):
+    repetir(chave_idempotencia)
+elif erro["type"] in ("authentication_error", "permission_error"):
+    alertar_operacao(erro["code"])
+else:
+    registrar_falha_do_pedido(erro["code"], erro["details"])
+```
+
+</CodeGroup>
+
+<Note>
+  Registre `code`, `type` e o horário da chamada no seu log. São esses três que permitem localizar a
+  requisição do nosso lado quando você abre um chamado.
+</Note>
+
+## Veja também
+
+<CardGroup cols={2}>
+  <Card title="Repetir com segurança" icon="repeat" href="/receitas/repetir-com-seguranca">
+    A matriz de qual código merece retry.
+  </Card>
+  <Card title="Limites de requisição" icon="gauge" href="/essenciais/limites-de-taxa">
+    Como não chegar no `429`.
+  </Card>
+</CardGroup>
+
+<Suporte />

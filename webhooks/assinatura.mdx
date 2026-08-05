@@ -1,0 +1,72 @@
+---
+title: "Verificar a assinatura"
+description: "Como conferir o X-Vext-Signature sobre o corpo bruto, e por que recusar timestamps de mais de 5 minutos."
+---
+
+import VerificarAssinatura from "/snippets/verificar-assinatura.mdx";
+import Suporte from "/snippets/suporte.mdx";
+
+<Warning>
+  Confira a assinatura **antes** de agir. Quem tem o segredo consegue forjar um `charge.paid`, e um
+  sistema que libera produto ao recebê-lo entregaria de graça para qualquer pessoa que descobrisse a
+  URL do seu endpoint.
+</Warning>
+
+Toda entrega chega com o header:
+
+```
+X-Vext-Signature: t=1785931392,v1=8f3c1d0a5b7e9042c6a1b3d5e7f9012345678901abcdef234567890abcdef1234
+```
+
+Onde `v1` é:
+
+```
+HMAC-SHA256("<timestamp>.<corpo bruto>", <segredo do endpoint>)
+```
+
+O segredo é o do endpoint que recebeu a entrega, disponível em **Desenvolvedores**.
+
+## As duas regras
+
+**1. Calcule sobre o corpo bruto, antes de desserializar.**
+
+Reserializar muda espaçamento e ordem de chaves, e o HMAC deixa de bater. Na prática isso significa
+`$request->getContent()` no Laravel, `express.raw()` no Express e `request.get_data()` no Flask —
+nunca `->all()`, `express.json()` ou `request.json`.
+
+**2. Recuse timestamps com mais de 5 minutos.**
+
+É isso que impede alguém que interceptou uma entrega de `charge.paid` de reenviá-la quantas vezes
+quiser. A assinatura dela é perfeitamente válida para sempre; só a janela a torna inútil.
+
+## Implementação
+
+<VerificarAssinatura />
+
+<Note>
+  Compare em tempo constante: `hash_equals`, `crypto.timingSafeEqual` ou `hmac.compare_digest`.
+  Uma comparação comum de strings sai no primeiro byte diferente, e a diferença de tempo entre uma
+  tentativa e outra permite descobrir a assinatura correta byte a byte.
+</Note>
+
+## Depois de conferir
+
+Só então desserialize e trate o evento. Responda `2xx` rápido e processe em fila — ver
+[Entregas e retentativas](/webhooks/entregas-e-retentativas).
+
+Se a assinatura não bate, responda `400` e registre o `X-Vext-Delivery` no seu log. Não processe
+"por via das dúvidas": um evento que não passou na verificação ou é adulterado, ou o segredo está
+errado, e nos dois casos agir é pior que não agir.
+
+## Veja também
+
+<CardGroup cols={2}>
+  <Card title="Visão geral" icon="webhook" href="/webhooks/visao-geral">
+    Os três eventos e o envelope.
+  </Card>
+  <Card title="Checkout PIX" icon="qr-code" href="/receitas/checkout-pix">
+    O fluxo completo, da criação à liberação.
+  </Card>
+</CardGroup>
+
+<Suporte />

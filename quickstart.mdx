@@ -1,47 +1,229 @@
 ---
-title: "Quickstart"
-description: "Begin with a guide on the fastest path to a successful outcome"
+title: "Primeira cobrança"
+description: "Do sk_test_ ao QR na tela, com o webhook de confirmação já ligado."
 ---
 
-Describe how someone begins using your product. What is the first thing they need to do? Are there any prerequisites?
+import AvisoCentavos from "/snippets/aviso-centavos.mdx";
+import Suporte from "/snippets/suporte.mdx";
 
-A quickstart should take someone from zero to using your product. They'll get a quick win and a sense of what they can accomplish.
+Ao final desta página você terá uma cobrança PIX criada, um QR pronto para exibir, e o evento de
+confirmação chegando no seu servidor.
 
-## Prerequisites
+## Antes de começar
 
-Before you begin, you must have:
+- Uma chave `sk_test_`, criada em **Desenvolvedores** no painel. O valor em claro aparece uma única
+  vez — copie na hora.
+- Um endpoint público para receber o webhook. Em desenvolvimento, um túnel (`ngrok`, `expose`) serve.
 
-- Requirement one (for example, Node.js 18+, a free account, an API key)
-- Requirement two (for example, a compatible device, a compatible browser, a compatible operating system)
-
-## Get started
+<AvisoCentavos />
 
 <Steps>
-  <Step title="Install">
-    Describe how to install your product or sign up.
 
-    ```bash
-    npm install your-package
-    ```
-  </Step>
-  <Step title="Configure">
-    Describe any setup or configuration needed before first use.
+<Step title="Crie a cobrança">
 
-    ```bash
-    your-cli init
-    ```
-  </Step>
-  <Step title="Run it">
-    Show the first thing a user does to see it working.
+Envie o valor em centavos e uma `Idempotency-Key` sua. `reference` é o seu número de pedido — é por
+ele que você reencontra a cobrança depois.
 
-    ```bash
-    your-cli start
-    ```
-  </Step>
+<CodeGroup>
+
+```bash cURL
+curl -X POST https://api.vext.com.br/v1/charges \
+  -H "Authorization: Bearer sk_test_..." \
+  -H "Idempotency-Key: pedido-1042" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "amount": 10000,
+    "description": "Curso de Vue 3",
+    "reference": "pedido-1042",
+    "customer": {
+      "name": "João Comprador",
+      "email": "joao@exemplo.com.br",
+      "document": "11144477735",
+      "document_type": "CPF"
+    }
+  }'
+```
+
+```php PHP
+$resposta = Http::withToken(config('services.vext.key'))
+    ->withHeaders(['Idempotency-Key' => 'pedido-1042'])
+    ->post('https://api.vext.com.br/v1/charges', [
+        'amount' => 10000,                   // R$ 100,00 em centavos inteiros
+        'description' => 'Curso de Vue 3',
+        'reference' => 'pedido-1042',
+        'customer' => [
+            'name' => 'João Comprador',
+            'email' => 'joao@exemplo.com.br',
+            'document' => '11144477735',
+            'document_type' => 'CPF',
+        ],
+    ]);
+
+$cobranca = $resposta->json();
+```
+
+```javascript JavaScript
+const resposta = await fetch('https://api.vext.com.br/v1/charges', {
+  method: 'POST',
+  headers: {
+    Authorization: `Bearer ${process.env.VEXT_API_KEY}`,
+    'Idempotency-Key': 'pedido-1042',
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({
+    amount: 10000, // R$ 100,00 em centavos inteiros
+    description: 'Curso de Vue 3',
+    reference: 'pedido-1042',
+    customer: {
+      name: 'João Comprador',
+      email: 'joao@exemplo.com.br',
+      document: '11144477735',
+      document_type: 'CPF',
+    },
+  }),
+});
+
+const cobranca = await resposta.json();
+```
+
+```python Python
+resposta = requests.post(
+    "https://api.vext.com.br/v1/charges",
+    headers={
+        "Authorization": f"Bearer {os.environ['VEXT_API_KEY']}",
+        "Idempotency-Key": "pedido-1042",
+    },
+    json={
+        "amount": 10000,  # R$ 100,00 em centavos inteiros
+        "description": "Curso de Vue 3",
+        "reference": "pedido-1042",
+        "customer": {
+            "name": "João Comprador",
+            "email": "joao@exemplo.com.br",
+            "document": "11144477735",
+            "document_type": "CPF",
+        },
+    },
+)
+
+cobranca = resposta.json()
+```
+
+</CodeGroup>
+
+A resposta vem `201`:
+
+```json
+{
+  "object": "charge",
+  "id": "ch_01k1y6r6m6q2x0p3d9v4t7c8n2",
+  "status": "pending",
+  "payment_method": "pix",
+  "amount": 10000,
+  "currency": "BRL",
+  "platform_fee": 798,
+  "net_amount": 9202,
+  "refunded_amount": 0,
+  "reference": "pedido-1042",
+  "pix": {
+    "qr_code": "00020101021226840014br.gov.bcb.pix2562qrcodepix.example.com/v2/abcd1234",
+    "expires_at": "2026-08-04T15:00:00+00:00",
+    "end_2_end_id": null
+  },
+  "created_at": "2026-08-04T14:00:00+00:00",
+  "paid_at": null
+}
+```
+
+Guarde o `id` junto do seu pedido.
+
+</Step>
+
+<Step title="Mostre o QR ao comprador">
+
+`pix.qr_code` é o payload copia-e-cola. A imagem do QR **não** vem na resposta: você a gera a partir
+do payload, com qualquer biblioteca de QR code.
+
+Mostre as duas formas — a imagem, para quem aponta a câmera, e o texto com um botão de copiar, para
+quem cola no aplicativo do banco. Exiba o vencimento a partir de `pix.expires_at`.
+
+<Note>
+  A cobrança nasce `pending` e vale 1 hora por padrão. Ajuste com `expires_in`, em segundos, entre 60
+  e 604.800.
+</Note>
+
+</Step>
+
+<Step title="Receba o charge.paid">
+
+Cadastre o seu endpoint em **Desenvolvedores**. Quando o PIX for confirmado, enviamos:
+
+```json
+{
+  "id": "evt_01k1y6r7z2m4n6p8q0r2s4t6u8",
+  "type": "charge.paid",
+  "created_at": "2026-08-04T14:03:12+00:00",
+  "data": {
+    "charge": {
+      "id": "ch_01k1y6r6m6q2x0p3d9v4t7c8n2",
+      "status": "paid",
+      "amount": 10000,
+      "reference": "pedido-1042",
+      "paid_at": "2026-08-04T14:03:11+00:00"
+    }
+  }
+}
+```
+
+<Warning>
+  **Confira a assinatura antes de agir.** Quem tem o segredo consegue forjar este evento, e um
+  sistema que libera produto ao recebê-lo entregaria de graça. O código pronto, nas quatro
+  linguagens, está em [Verificar a assinatura](/webhooks/assinatura).
+</Warning>
+
+Depois de conferir: grave o evento, responda `200`, e processe em fila. Só aí libere o produto.
+
+</Step>
+
+<Step title="Confirme">
+
+Consulte a cobrança e veja `status: "paid"`:
+
+```bash
+curl https://api.vext.com.br/v1/charges/ch_01k1y6r6m6q2x0p3d9v4t7c8n2 \
+  -H "Authorization: Bearer sk_test_..."
+```
+
+</Step>
+
 </Steps>
 
-<Tip>
-  Give people a way to get help. This could be a link to a support page, a chat with a customer support agent, or a forum for your product.
+## Se algo deu errado
 
-  Example: Need help? Reach out to us at [support@yourcompany.com](mailto:support@yourcompany.com).
-</Tip>
+| O que você viu | Provavelmente |
+| --- | --- |
+| `401 missing_api_key` | O header `Authorization` não foi enviado |
+| `403 insufficient_scope` | A chave não tem `charges:write` |
+| `422 validation_failed` em `amount` | Você mandou um decimal. Envie centavos inteiros |
+| `422 seller_not_approved` | O cadastro do vendedor ainda não está aprovado. O caminho é o painel |
+
+O catálogo completo está em [Erros](/essenciais/erros).
+
+## Próximos passos
+
+<CardGroup cols={2}>
+  <Card title="Checkout completo" icon="qr-code" href="/receitas/checkout-pix">
+    O fluxo de produção, com rede de segurança para quando o webhook falha.
+  </Card>
+  <Card title="Idempotência" icon="repeat" href="/essenciais/idempotencia">
+    Por que a `Idempotency-Key` importa mais do que parece.
+  </Card>
+  <Card title="Webhooks" icon="webhook" href="/webhooks/visao-geral">
+    Os três eventos, assinatura e retentativas.
+  </Card>
+  <Card title="Referência da API" icon="terminal" href="/api-reference/introducao">
+    Todos os campos, com playground.
+  </Card>
+</CardGroup>
+
+<Suporte />

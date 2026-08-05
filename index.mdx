@@ -1,20 +1,101 @@
 ---
-title: "Introduction"
-description: "Welcome to your project"
+title: "Introdução"
+description: "Cobranças PIX com split, estornos e saldo do vendedor. O que a API faz, o que ela recusa e por quê."
 ---
 
-Write a short description of your product here. What it does, who it's for, and what they can accomplish with it.
+import UrlsBase from "/snippets/urls-base.mdx";
+import Suporte from "/snippets/suporte.mdx";
 
-<Tip>
-  Ready to make this your own? Start by editing this page. Update your `docs.json` file to customize your site. Then fill out the [Quickstart](/quickstart) page.
-</Tip>
+A Vext é um gateway de pagamentos PIX com split entre o vendedor e a plataforma. Você cria a
+cobrança, mostra o QR ao comprador, e nós avisamos quando o dinheiro entra.
 
-<Card title="Quickstart" icon="rocket" href="/quickstart">
-  This card links to the quickstart page in your project.
-</Card>
-<Card title="Components" icon="puzzle-piece" href="https://mintlify.com/docs/components">
-  Add cards, callouts, steps, tabs, and more to design and structure your pages.
-</Card>
-<Card title="Settings" icon="gear" href="https://mintlify.com/docs/organize/settings">
-  Set your site name, branding, and navigation in the `docs.json` file.
-</Card>
+<CardGroup cols={2}>
+  <Card title="Primeira cobrança" icon="rocket" href="/quickstart">
+    Do `sk_test_` ao QR na tela, com o webhook já ligado.
+  </Card>
+  <Card title="Referência da API" icon="terminal" href="/api-reference/introducao">
+    As cinco operações, com playground.
+  </Card>
+  <Card title="Webhooks" icon="webhook" href="/webhooks/visao-geral">
+    Os três eventos e como conferir a assinatura.
+  </Card>
+  <Card title="Receitas" icon="list-checks" href="/receitas/checkout-pix">
+    Fluxos completos, do checkout à conciliação.
+  </Card>
+</CardGroup>
+
+## Quatro regras que valem para tudo
+
+Elas reaparecem em cada página adiante. Se você ler só esta seção, já evita os quatro erros que mais
+chegam ao suporte.
+
+<AccordionGroup>
+
+<Accordion title="Dinheiro é sempre centavos inteiros" icon="coins">
+  R\$ 100,00 se envia como `10000`. Um decimal devolve `422`, e a recusa é deliberada: `19.99 * 100`
+  dá `1998.9999999999998` em ponto flutuante, o truncamento vira `1998`, e o centavo perdido só
+  aparece na conciliação do mês.
+
+  [Valores em centavos →](/essenciais/valores-em-centavos)
+</Accordion>
+
+<Accordion title="A chave secreta fica no servidor" icon="key">
+  O valor em claro aparece **uma única vez**, na criação — guardamos apenas um hash SHA-256.
+  Colocá-la no navegador do comprador a entrega a qualquer pessoa que abra a página.
+
+  [Autenticação →](/essenciais/autenticacao)
+</Accordion>
+
+<Accordion title="Idempotency-Key em todo POST" icon="repeat">
+  A conexão que cai depois da requisição e antes da resposta deixa você sem saber se cobrou. Repetir
+  com a mesma chave resolve isso sem risco de cobrar duas vezes.
+
+  [Idempotência →](/essenciais/idempotencia)
+</Accordion>
+
+<Accordion title="Trate o erro pelo code, nunca pela message" icon="triangle-alert">
+  O `code` é contrato; o texto pode ser reescrito a qualquer momento. Um `if` que compara a mensagem
+  quebra silenciosamente na primeira vez que a melhorarmos.
+
+  [Erros →](/essenciais/erros)
+</Accordion>
+
+</AccordionGroup>
+
+## O que existe na v1
+
+**Cinco operações**, todas sob `/v1`:
+
+| Operação | Endpoint |
+| --- | --- |
+| [Criar cobrança](/api-reference/cobrancas/criar) | `POST /v1/charges` |
+| [Listar cobranças](/api-reference/cobrancas/listar) | `GET /v1/charges` |
+| [Consultar cobrança](/api-reference/cobrancas/consultar) | `GET /v1/charges/{code}` |
+| [Estornar cobrança](/api-reference/cobrancas/estornar) | `POST /v1/charges/{code}/refund` |
+| [Consultar saldo](/api-reference/saldo/consultar) | `GET /v1/balance` |
+
+**Três eventos**, que nós enviamos para o seu sistema:
+
+| Evento | Quando dispara |
+| --- | --- |
+| [`charge.paid`](/api-reference/webhooks/charge-paid) | O PIX é confirmado |
+| [`charge.refunded`](/api-reference/webhooks/charge-refunded) | Um estorno é concluído |
+| [`withdrawal.paid`](/api-reference/webhooks/withdrawal-paid) | O saque cai na conta do vendedor |
+
+## O que a API não faz
+
+Vale saber antes de procurar:
+
+- **Não devolvemos a imagem do QR.** Só o payload copia-e-cola, em `pix.qr_code`. A imagem você gera
+  localmente — mandar um PNG em base64 em toda resposta multiplicaria o corpo por algo que leva
+  milissegundos do seu lado.
+- **Não há endpoint de saque.** O saque é pedido pelo painel; a API só avisa quando ele cai, por
+  `withdrawal.paid`.
+- **Não expomos dados de outras contas.** A lista devolve apenas as cobranças do vendedor dono da
+  chave, e o `404` de uma cobrança alheia é o mesmo `404` de uma que não existe.
+
+## URL base
+
+<UrlsBase />
+
+<Suporte />

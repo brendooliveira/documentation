@@ -1,0 +1,17 @@
+---
+title: "Criar cobrança"
+description: "Cria uma cobrança PIX com split entre o vendedor e a plataforma, e devolve o payload copia-e-cola."
+openapi: "/api-reference/openapi.yaml POST /v1/charges"
+---
+
+import AvisoCentavos from "/snippets/aviso-centavos.mdx";
+import NotaIdempotencia from "/snippets/nota-idempotencia.mdx";
+
+<AvisoCentavos />
+
+<NotaIdempotencia />
+
+<Note>
+  A resposta traz `pix.qr_code`, o payload copia-e-cola. A **imagem** do QR não é devolvida: você a
+  gera localmente a partir do payload. Ver [Checkout PIX de ponta a ponta](/receitas/checkout-pix).
+</Note>

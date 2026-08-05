@@ -1,0 +1,158 @@
+---
+title: "Conciliar cobranças com os seus pedidos"
+description: "Use reference como chave de ligação e feche o dia com GET /v1/charges."
+---
+
+import Suporte from "/snippets/suporte.mdx";
+
+## `reference` é a chave de ligação
+
+Envie o seu identificador em `reference` na criação da cobrança. Ele volta na consulta e nos
+webhooks, e serve de filtro em `GET /v1/charges`.
+
+É o que permite casar a cobrança com o seu pedido **sem guardar o `id` que devolvemos** — útil no dia
+em que a sua tabela de pedidos perdeu a coluna, ou quando alguém do financeiro precisa achar uma
+venda a partir do número do pedido e não tem acesso ao seu banco.
+
+```bash Reencontrar pelo seu número de pedido
+curl "https://api.vext.com.br/v1/charges?reference=pedido-1042" \
+  -H "Authorization: Bearer sk_live_..."
+```
+
+## Fechando um período
+
+Combine `status`, `created_from` e `created_to`:
+
+```bash Tudo que foi pago em agosto
+curl -G "https://api.vext.com.br/v1/charges" \
+  -H "Authorization: Bearer sk_live_..." \
+  --data-urlencode "status=paid" \
+  --data-urlencode "created_from=2026-08-01T00:00:00-03:00" \
+  --data-urlencode "created_to=2026-08-31T23:59:59-03:00" \
+  --data-urlencode "per_page=100"
+```
+
+As datas são ISO 8601 e filtram por **criação**, não por pagamento. Uma cobrança criada em 31 de
+julho e paga em 1º de agosto não aparece no filtro de agosto — vale conferir a borda do período
+contra `paid_at` quando o relatório precisa fechar por competência.
+
+## Paginação
+
+O teto é 100 itens por página, e o padrão é 25. O limite existe porque uma página gigante de um
+vendedor com histórico degrada a consulta para todos os outros.
+
+<CodeGroup>
+
+```php PHP
+$pagina = 1;
+
+do {
+    $resposta = Http::withToken(config('services.vext.key'))
+        ->get('https://api.vext.com.br/v1/charges', [
+            'status' => 'paid',
+            'created_from' => $inicio,
+            'created_to' => $fim,
+            'per_page' => 100,
+            'page' => $pagina,
+        ])
+        ->json();
+
+    foreach ($resposta['data'] as $cobranca) {
+        $this->conciliar($cobranca);
+    }
+
+    $pagina++;
+} while ($resposta['pagination']['has_more']);
+```
+
+```javascript JavaScript
+let pagina = 1;
+let temMais = true;
+
+while (temMais) {
+  const url = new URL('https://api.vext.com.br/v1/charges');
+  url.search = new URLSearchParams({
+    status: 'paid',
+    created_from: inicio,
+    created_to: fim,
+    per_page: '100',
+    page: String(pagina),
+  });
+
+  const resposta = await fetch(url, {
+    headers: { Authorization: `Bearer ${process.env.VEXT_API_KEY}` },
+  }).then((r) => r.json());
+
+  for (const cobranca of resposta.data) conciliar(cobranca);
+
+  temMais = resposta.pagination.has_more;
+  pagina++;
+}
+```
+
+```python Python
+pagina = 1
+tem_mais = True
+
+while tem_mais:
+    resposta = requests.get(
+        "https://api.vext.com.br/v1/charges",
+        headers={"Authorization": f"Bearer {os.environ['VEXT_API_KEY']}"},
+        params={
+            "status": "paid",
+            "created_from": inicio,
+            "created_to": fim,
+            "per_page": 100,
+            "page": pagina,
+        },
+    ).json()
+
+    for cobranca in resposta["data"]:
+        conciliar(cobranca)
+
+    tem_mais = resposta["pagination"]["has_more"]
+    pagina += 1
+```
+
+</CodeGroup>
+
+Pare por `has_more`, não por página vazia. E respeite a cota de leitura — ver
+[Limites de requisição](/essenciais/limites-de-taxa).
+
+## Os números que fecham a conta
+
+| Campo | O que é |
+| --- | --- |
+| `amount` | O que o comprador pagou |
+| `platform_fee` | A nossa taxa |
+| `net_amount` | O que fica com o vendedor (`amount - platform_fee`) |
+| `refunded_amount` | Quanto já voltou ao comprador, acumulado |
+
+<Note>
+  `platform_fee` é **congelada na criação**. Ela reflete o contrato que valia quando a venda
+  aconteceu, não o de hoje. Recalcular a taxa pela tabela atual ao conciliar vendas antigas produz
+  uma diferença que não existe.
+</Note>
+
+Uma cobrança `partially_refunded` ainda tem receita: o que sobrou é `amount - refunded_amount`.
+Tratá-la como `refunded` descontaria o valor inteiro. Ver
+[Ciclo de vida](/essenciais/ciclo-de-vida-da-cobranca).
+
+## A lista só enxerga a sua conta
+
+`GET /v1/charges` devolve apenas as cobranças do vendedor dono da chave. Não existe forma de
+alcançar a venda de outra conta por esta API — e o `404` de uma cobrança alheia é o mesmo `404` de
+uma que não existe, para que ninguém descubra códigos válidos por tentativa.
+
+## Veja também
+
+<CardGroup cols={2}>
+  <Card title="Listar cobranças" icon="list" href="/api-reference/cobrancas/listar">
+    Todos os filtros disponíveis.
+  </Card>
+  <Card title="Saldo do vendedor" icon="wallet" href="/essenciais/saldo">
+    O outro lado da conta.
+  </Card>
+</CardGroup>
+
+<Suporte />

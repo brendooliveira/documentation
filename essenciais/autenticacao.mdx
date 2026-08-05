@@ -1,0 +1,98 @@
+---
+title: "Autenticação"
+description: "Chave secreta no header, escopos por endpoint e a diferença entre 401 e 403."
+---
+
+import UrlsBase from "/snippets/urls-base.mdx";
+import Suporte from "/snippets/suporte.mdx";
+
+Toda chamada leva a chave no header:
+
+```bash
+curl https://api.vext.com.br/v1/balance \
+  -H "Authorization: Bearer sk_live_..."
+```
+
+<UrlsBase />
+
+## A chave aparece uma única vez
+
+A chave é criada em **Desenvolvedores** no painel, e o valor em claro aparece **uma única vez**, na
+criação. Guardamos apenas um hash SHA-256.
+
+Nem o suporte consegue recuperá-la, e é esse o ponto: um dump do nosso banco não permite cobrar em
+nome de ninguém. Perdeu, gere outra e revogue a anterior.
+
+<Warning>
+  A chave vai no **servidor**. Colocá-la no JavaScript do navegador a entrega a qualquer pessoa que
+  abra as ferramentas de desenvolvedor da página — e com ela vêm as suas cobranças, os seus estornos
+  e o seu saldo.
+</Warning>
+
+## Ambientes
+
+Chaves de teste usam o prefixo `sk_test_`; as de produção, `sk_live_`. A diferença é visível a olho
+nu de propósito — uma chave de teste colada em produção precisa ser reconhecível antes de alguém
+passar a tarde investigando por que nada acontece.
+
+## Escopos
+
+Cada chave carrega escopos. Dê a cada integração só o que ela usa: uma chave de relatório que
+vazou não deveria conseguir criar cobrança nem estornar.
+
+| Escopo | Libera |
+| --- | --- |
+| `charges:write` | `POST /v1/charges` |
+| `charges:read` | `GET /v1/charges` e `GET /v1/charges/{code}` |
+| `refunds:write` | `POST /v1/charges/{code}/refund` |
+| `balance:read` | `GET /v1/balance` |
+
+## 401 e 403 respondem coisas diferentes
+
+Chamar um endpoint fora do escopo devolve `403`, e não `401`: a chave está certa, faltou permissão.
+Devolver `401` diria "sua chave está errada" a quem tem a chave certa, e a pessoa iria procurar o
+problema no lugar errado.
+
+**`401` — o problema é a chave.** Quatro códigos, distinguidos na `message` e nunca no status:
+
+| `code` | Significa |
+| --- | --- |
+| `missing_api_key` | Você não enviou o header |
+| `invalid_api_key` | A chave não existe |
+| `revoked_api_key` | A chave existiu e foi desligada |
+| `expired_api_key` | A chave existiu e venceu |
+
+A revogada é distinguida da inexistente na mensagem porque quem integra precisa saber que a chave
+existiu e foi desligada — e quem está adivinhando tokens não aprende nada com isso, já que o status
+é o mesmo nos quatro casos.
+
+**`403` — o problema é o escopo.** O `details` diz exatamente o que faltou:
+
+```json insufficient_scope
+{
+  "error": {
+    "type": "permission_error",
+    "code": "insufficient_scope",
+    "message": "Esta chave não tem o escopo [refunds:write].",
+    "details": {
+      "required_ability": "refunds:write",
+      "abilities": ["charges:read", "charges:write"]
+    }
+  }
+}
+```
+
+Nenhum dos dois se resolve repetindo a chamada. Corrija a chave, ou gere outra com o escopo certo.
+
+## Veja também
+
+<CardGroup cols={2}>
+  <Card title="Erros" icon="triangle-alert" href="/essenciais/erros">
+    O catálogo completo e o que fazer em cada família.
+  </Card>
+  <Card title="Webhooks" icon="webhook" href="/webhooks/assinatura">
+    O segredo de assinatura é outro, e por endpoint.
+  </Card>
+</CardGroup>
+
+<Suporte />

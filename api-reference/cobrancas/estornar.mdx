@@ -1,0 +1,20 @@
+---
+title: "Estornar cobrança"
+description: "Devolve o dinheiro ao comprador, no todo ou em parte."
+openapi: "/api-reference/openapi.yaml POST /v1/charges/{code}/refund"
+---
+
+import AvisoCentavos from "/snippets/aviso-centavos.mdx";
+import NotaIdempotencia from "/snippets/nota-idempotencia.mdx";
+
+<AvisoCentavos />
+
+<NotaIdempotencia />
+
+<Warning>
+  Sem `amount`, devolvemos **o que ainda cabe estornar** — e não o valor da venda. Numa cobrança já
+  devolvida pela metade, mandar o valor cheio de volta tiraria o dinheiro duas vezes do vendedor.
+</Warning>
+
+`amount`, `fee_returned` e `seller_debit` respondem perguntas diferentes e por isso vêm separados.
+A aritmética está em [Estornos](/essenciais/estornos).

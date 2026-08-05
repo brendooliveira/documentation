@@ -1,0 +1,111 @@
+---
+title: "Entregas e retentativas"
+description: "Qualquer 2xx encerra a entrega; o resto agenda nova tentativa. Como deduplicar pelo id do evento."
+---
+
+import Suporte from "/snippets/suporte.mdx";
+
+Qualquer resposta `2xx` encerra a entrega. Qualquer coisa fora dessa faixa — inclusive um timeout —
+agenda nova tentativa.
+
+## Responda rápido, processe depois
+
+<Warning>
+  Demorar vira retentativa, e retentativa em fluxo de dinheiro é como um pagamento acaba contabilizado
+  duas vezes. Se o seu handler leva 30 segundos para liberar o acesso, você vai receber o mesmo evento
+  de novo enquanto ainda está processando o primeiro.
+</Warning>
+
+O padrão que resolve isso tem três passos:
+
+<Steps>
+  <Step title="Confira a assinatura">
+    Antes de qualquer outra coisa. Ver [Verificar a assinatura](/webhooks/assinatura).
+  </Step>
+  <Step title="Grave o evento e responda 200">
+    Grave o `id` e o corpo. Responda imediatamente. Nada de liberar produto aqui.
+  </Step>
+  <Step title="Processe em fila">
+    O trabalho de verdade acontece fora do ciclo da requisição, onde demorar não custa uma
+    retentativa.
+  </Step>
+</Steps>
+
+## Deduplique pelo `id` do evento
+
+O `id` (`evt_…`) é estável entre as retentativas da mesma entrega. Uma entrega que desistiu depois
+das retentativas pode ser reenviada à mão pelo painel — e o `id` continua o mesmo, justamente para a
+sua idempotência reconhecê-lo.
+
+<CodeGroup>
+
+```php PHP
+// A unicidade é do banco, não do seu if. Duas entregas simultâneas passariam por um exists().
+try {
+    EventoRecebido::create(['id' => $evento['id'], 'tipo' => $evento['type']]);
+} catch (QueryException) {
+    return response()->noContent(); // já vimos este evento
+}
+
+ProcessarEvento::dispatch($evento['id']);
+
+return response()->noContent();
+```
+
+```javascript JavaScript
+// A unicidade é do banco, não do seu if. Duas entregas simultâneas passariam por um findOne().
+try {
+  await db.eventos.insert({ id: evento.id, tipo: evento.type });
+} catch (e) {
+  if (e.code === '23505') return res.sendStatus(200); // já vimos este evento
+  throw e;
+}
+
+await fila.enfileirar('processar-evento', { id: evento.id });
+
+res.sendStatus(200);
+```
+
+```python Python
+# A unicidade é do banco, não do seu if. Duas entregas simultâneas passariam por um exists().
+try:
+    db.eventos.insert(id=evento["id"], tipo=evento["type"])
+except UniqueViolation:
+    return "", 200  # já vimos este evento
+
+fila.enfileirar("processar-evento", id=evento["id"])
+
+return "", 200
+```
+
+</CodeGroup>
+
+<Note>
+  Use uma restrição de unicidade no banco, e não uma consulta seguida de inserção. Duas entregas que
+  chegam ao mesmo tempo passam as duas pela consulta antes de qualquer uma inserir — e o produto é
+  liberado duas vezes.
+</Note>
+
+## Depurando uma entrega
+
+Cada tentativa tem um `X-Vext-Delivery`. É por ele que localizamos a tentativa, a resposta do seu
+servidor e o horário. Registre-o em log mesmo quando tudo dá certo: quando algo der errado, ele é a
+diferença entre um chamado de cinco minutos e uma tarde de investigação.
+
+## O que não é entregue
+
+Os estados intermediários de saque (`processing`, `pending`) não geram evento. Eles não pedem ação
+do seu lado, e cada entrega tem custo de retentativa. Só `withdrawal.paid` é enviado.
+
+## Veja também
+
+<CardGroup cols={2}>
+  <Card title="Verificar a assinatura" icon="shield-check" href="/webhooks/assinatura">
+    O passo que vem antes de tudo.
+  </Card>
+  <Card title="Idempotência" icon="repeat" href="/essenciais/idempotencia">
+    O mesmo princípio, na direção oposta.
+  </Card>
+</CardGroup>
+
+<Suporte />

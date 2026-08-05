@@ -1,0 +1,45 @@
+---
+title: "Visão geral"
+description: "URL base, prefixo /v1, cabeçalhos comuns e como usar o playground sem cobrar ninguém de verdade."
+---
+
+import UrlsBase from "/snippets/urls-base.mdx";
+import HeadersComuns from "/snippets/headers-comuns.mdx";
+import Suporte from "/snippets/suporte.mdx";
+
+A API da Vext tem cinco operações e três eventos. Tudo em JSON, tudo sob `/v1`, tudo autenticado por
+chave secreta no header.
+
+## URL base
+
+<UrlsBase />
+
+## Cabeçalhos
+
+<HeadersComuns />
+
+## Erros
+
+Todo erro tem a mesma forma, inclusive os que não previmos:
+
+```json
+{
+  "error": {
+    "type": "invalid_request_error",
+    "code": "amount_below_minimum",
+    "message": "O valor está abaixo do mínimo permitido.",
+    "details": {}
+  }
+}
+```
+
+Trate pelo `code`, nunca pela `message`: o código é contrato, o texto pode ser reescrito a qualquer
+momento. O catálogo completo está em [Erros](/essenciais/erros).
+
+## Usando o playground
+
+O playground desta documentação envia requisições de verdade. Cole uma chave `sk_test_` — nunca uma
+`sk_live_`. O prefixo é visível a olho nu de propósito: uma chave de produção colada aqui cria uma
+cobrança real, com dinheiro real de um comprador real.
+
+<Suporte />

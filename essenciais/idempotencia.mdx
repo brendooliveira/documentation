@@ -1,0 +1,139 @@
+---
+title: "Idempotência"
+description: "Como repetir um POST depois de um erro de rede sem cobrar duas vezes."
+---
+
+import Suporte from "/snippets/suporte.mdx";
+
+Envie `Idempotency-Key` em todo `POST`.
+
+A conexão que cai depois da requisição e antes da resposta deixa você sem saber se cobrou. Repetir é
+a única saída, e sem a chave a repetição cria uma segunda cobrança. Com ela, repetir devolve a
+primeira.
+
+```bash
+curl -X POST https://api.vext.com.br/v1/charges \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Idempotency-Key: pedido-1042" \
+  -H "Content-Type: application/json" \
+  -d '{"amount": 10000, "customer": {"name": "João Comprador"}}'
+```
+
+## Os três desfechos
+
+**Mesma chave, mesmo corpo** → a resposta gravada, com o header `Idempotent-Replayed: true`. A
+cobrança não é recriada. Trate como sucesso: o recurso no corpo é o mesmo de antes.
+
+**Mesma chave, corpo diferente** → `409 idempotency_key_reused`. Devolver a cobrança antiga faria
+você acreditar que cobrou o valor novo. Use uma chave nova.
+
+**Mesma chave, primeira ainda em voo** → `409 idempotency_key_in_progress`. Repita em instantes.
+
+<Note>
+  A ordem dos campos no JSON não invalida o retry. Comparamos o conteúdo, não o texto — reserializar
+  o mesmo objeto em outra ordem continua sendo o mesmo corpo.
+</Note>
+
+## O que serve de chave
+
+A chave identifica a **sua tentativa**, não a nossa cobrança. Ela vale por 24 horas e é sua: dois
+clientes diferentes podem usar `pedido-1` sem colidir. Limite de 255 caracteres, ou você recebe
+`400 idempotency_key_too_long`.
+
+Uma boa chave é estável e derivada do que você está tentando fazer — o número do pedido, ou um UUID
+gerado uma vez e gravado junto do pedido.
+
+<Warning>
+  Gere a chave **antes** da primeira tentativa e reutilize-a em todas as repetições. Uma chave nova a
+  cada volta do laço tem o mesmo efeito de não mandar chave nenhuma: cada tentativa vira uma cobrança.
+</Warning>
+
+<CodeGroup>
+
+```php PHP
+// A chave nasce uma vez, fora do laço, e sobrevive às tentativas.
+$chave = $pedido->uuid;
+
+for ($tentativa = 1; $tentativa <= 3; $tentativa++) {
+    $resposta = $http->withHeaders(['Idempotency-Key' => $chave])
+        ->post('https://api.vext.com.br/v1/charges', $corpo);
+
+    if ($resposta->successful()) {
+        break;
+    }
+
+    if (! in_array($resposta->status(), [409, 429, 500, 502, 503], true)) {
+        break; // 4xx de validação não melhora com repetição
+    }
+
+    sleep(2 ** $tentativa);
+}
+```
+
+```javascript JavaScript
+// A chave nasce uma vez, fora do laço, e sobrevive às tentativas.
+const chave = pedido.uuid;
+
+for (let tentativa = 1; tentativa <= 3; tentativa++) {
+  const resposta = await fetch('https://api.vext.com.br/v1/charges', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${process.env.VEXT_API_KEY}`,
+      'Idempotency-Key': chave,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(corpo),
+  });
+
+  if (resposta.ok) break;
+  if (![409, 429, 500, 502, 503].includes(resposta.status)) break;
+
+  await new Promise((r) => setTimeout(r, 2 ** tentativa * 1000));
+}
+```
+
+```python Python
+# A chave nasce uma vez, fora do laço, e sobrevive às tentativas.
+chave = pedido.uuid
+
+for tentativa in range(1, 4):
+    resposta = requests.post(
+        "https://api.vext.com.br/v1/charges",
+        headers={
+            "Authorization": f"Bearer {os.environ['VEXT_API_KEY']}",
+            "Idempotency-Key": chave,
+        },
+        json=corpo,
+    )
+
+    if resposta.ok:
+        break
+    if resposta.status_code not in (409, 429, 500, 502, 503):
+        break  # 4xx de validação não melhora com repetição
+
+    time.sleep(2**tentativa)
+```
+
+</CodeGroup>
+
+## Onde ela salva o dia
+
+`502 provider_unavailable` é o caso clássico. O provedor não respondeu, e pode ser que a cobrança
+tenha sido criada lá e a resposta se perdido no caminho. Repetir sem chave criaria a segunda; com a
+mesma chave, você recebe a primeira.
+
+O mesmo vale para `500 internal_error` e `503 platform_unavailable`. É a `Idempotency-Key` que torna
+repetir seguro.
+
+## Veja também
+
+<CardGroup cols={2}>
+  <Card title="Repetir com segurança" icon="repeat" href="/receitas/repetir-com-seguranca">
+    Quais códigos merecem retry, e com que espera.
+  </Card>
+  <Card title="Erros" icon="triangle-alert" href="/essenciais/erros">
+    O catálogo completo de códigos.
+  </Card>
+</CardGroup>
+
+<Suporte />

@@ -1,0 +1,99 @@
+---
+title: "Limites de requisição"
+description: "Três baldes por minuto, os cabeçalhos que chegam em toda resposta e como desacelerar antes de bater no teto."
+---
+
+import Suporte from "/snippets/suporte.mdx";
+
+Há três limites, todos por minuto:
+
+| Balde | Contado por | Quando se aplica |
+| --- | --- | --- |
+| Pré-autenticação | IP | Antes de sabermos de quem é a chave |
+| Leitura | Chave | `GET /v1/charges`, `GET /v1/charges/{code}`, `GET /v1/balance` |
+| Escrita | Chave | `POST /v1/charges`, `POST /v1/charges/{code}/refund` |
+
+Leitura e escrita são contadas por **chave**, não por conta: o excesso de uma integração não consome
+a cota das outras do mesmo vendedor. É mais um motivo para dar uma chave própria a cada sistema.
+
+A escrita é bem mais apertada porque cada cobrança criada vira uma chamada ao provedor — o limite
+protege a fila de todo mundo, não só a sua.
+
+## Os cabeçalhos chegam sempre
+
+`X-RateLimit-Limit` e `X-RateLimit-Remaining` vêm em **toda** resposta, não só nas `429`. São eles
+que permitem desacelerar antes de bater no limite, que é a diferença entre uma integração que reduz
+o ritmo sozinha e uma que descobre o teto batendo nele.
+
+| Header | Significa |
+| --- | --- |
+| `X-RateLimit-Limit` | Requisições permitidas por minuto neste balde |
+| `X-RateLimit-Remaining` | Quantas ainda cabem no minuto corrente |
+| `Retry-After` | Só na `429`: segundos até a cota ser reposta |
+
+<CodeGroup>
+
+```php PHP
+$restantes = (int) $resposta->header('X-RateLimit-Remaining');
+
+// Reduza o ritmo antes do teto, não depois.
+if ($restantes < 5) {
+    usleep(200_000);
+}
+```
+
+```javascript JavaScript
+const restantes = Number(resposta.headers.get('X-RateLimit-Remaining'));
+
+// Reduza o ritmo antes do teto, não depois.
+if (restantes < 5) {
+  await new Promise((r) => setTimeout(r, 200));
+}
+```
+
+```python Python
+restantes = int(resposta.headers["X-RateLimit-Remaining"])
+
+# Reduza o ritmo antes do teto, não depois.
+if restantes < 5:
+    time.sleep(0.2)
+```
+
+</CodeGroup>
+
+## Quando você bate
+
+A `429` vem com `Retry-After` em segundos. Honre esse número.
+
+```json too_many_requests
+{
+  "error": {
+    "type": "rate_limit_error",
+    "code": "too_many_requests",
+    "message": "Muitas requisições. Tente novamente em 42 segundos.",
+    "details": { "retry_after": 42 }
+  }
+}
+```
+
+Existe um segundo código na mesma família: `provider_rate_limited`. Aí o limite atingido é o do
+provedor, não o nosso — repita com backoff exponencial, já que não há um `Retry-After` confiável
+para copiar.
+
+<Warning>
+  Nunca repita em laço apertado depois de uma `429`. Repetição cega é o que transforma um pico de
+  segundos em um bloqueio de minutos, porque cada tentativa recusada também conta.
+</Warning>
+
+## Veja também
+
+<CardGroup cols={2}>
+  <Card title="Repetir com segurança" icon="repeat" href="/receitas/repetir-com-seguranca">
+    Backoff exponencial e o que registrar em log.
+  </Card>
+  <Card title="Conciliação" icon="list-checks" href="/receitas/conciliacao">
+    Paginação sem estourar a cota de leitura.
+  </Card>
+</CardGroup>
+
+<Suporte />

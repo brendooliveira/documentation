@@ -1,0 +1,13 @@
+---
+title: "charge.refunded"
+description: "Enviado quando um estorno é concluído — inclusive os feitos fora do seu fluxo."
+openapi: "/api-reference/openapi.yaml webhook charge.refunded"
+---
+
+<Warning>
+  **Confira a assinatura antes de agir.** Ver [Verificar a assinatura](/webhooks/assinatura).
+</Warning>
+
+O evento traz a cobrança **e** o estorno, porque as duas perguntas aparecem juntas do outro lado:
+quanto voltou (o estorno) e se sobrou algo (a cobrança, com `status` e `refunded_amount` já
+atualizados). Uma venda devolvida pela metade chega como `partially_refunded`, não `refunded`.

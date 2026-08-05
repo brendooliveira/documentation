@@ -1,0 +1,109 @@
+---
+title: "Saldo do vendedor"
+description: "Quatro números que respondem perguntas diferentes, e por que null não é zero."
+---
+
+import Suporte from "/snippets/suporte.mdx";
+
+`GET /v1/balance` devolve quatro números. Eles não são variações do mesmo valor — cada um responde
+uma pergunta diferente.
+
+```json
+{
+  "object": "balance",
+  "currency": "BRL",
+  "balance": 92020,
+  "available": 82818,
+  "reserved": 9202,
+  "debt": 0,
+  "withdrawable": 50000,
+  "provider": {
+    "available": 50000,
+    "waiting_funds": 7000
+  }
+}
+```
+
+| Campo | Responde |
+| --- | --- |
+| `balance` | Tudo que o vendedor ganhou e ainda não sacou |
+| `reserved` | A parte que a reserva rolante ainda segura |
+| `available` | O que já pode sair pelo nosso extrato |
+| `withdrawable` | O **menor** entre o nosso disponível e o do provedor |
+
+## `withdrawable` é o número do saque
+
+É este que vale para pedir saque, e não `available`.
+
+Usar só o nosso disponível permitiria pedir dinheiro que a adquirente ainda não liberou — o pedido
+passaria por aqui e falharia lá, depois, sem nada que o vendedor pudesse fazer a respeito.
+
+`reserved` existe para que a diferença entre `balance` e `available` não pareça bug do sistema. É
+dinheiro do vendedor que ainda não pode sair.
+
+## `null` não é zero
+
+Quando a consulta ao provedor falha, `provider` e `withdrawable` vêm `null`:
+
+```json Provedor não respondeu
+{
+  "object": "balance",
+  "currency": "BRL",
+  "balance": 92020,
+  "available": 82818,
+  "reserved": 9202,
+  "debt": 0,
+  "withdrawable": null,
+  "provider": null
+}
+```
+
+<Warning>
+  Zero diria que não há dinheiro. `null` diz que houve uma consulta que não respondeu. Uma tela que
+  renderiza `null` como `R$ 0,00` informa ao vendedor que ele está sem saldo quando ele não está.
+</Warning>
+
+Mostre "indisponível no momento" e ofereça recarregar. O resto do saldo, que é nosso, continua
+correto e pode ser exibido normalmente.
+
+## Saldo negativo e `debt`
+
+`balance` pode ser negativo. Acontece quando um estorno chega depois do saque:
+
+```json Vendedor no vermelho
+{
+  "object": "balance",
+  "currency": "BRL",
+  "balance": -9301,
+  "available": 0,
+  "reserved": 0,
+  "debt": 9301,
+  "withdrawable": 0,
+  "provider": { "available": 0, "waiting_funds": 0 }
+}
+```
+
+Não é erro, e não é "saldo zero". `debt` é estado próprio: as próximas vendas cobrem a dívida
+automaticamente, e apenas o saque fica bloqueado até lá. As cobranças continuam funcionando
+normalmente.
+
+`available` nunca é negativo — a dívida aparece em `debt`, não como um disponível abaixo de zero.
+
+## O bloco `provider`
+
+`provider.available` é o que já está disponível na adquirente; `provider.waiting_funds` é o que está
+a caminho. Servem para explicar ao vendedor por que `withdrawable` é menor que `available`: o
+dinheiro existe, ainda não chegou.
+
+## Veja também
+
+<CardGroup cols={2}>
+  <Card title="Estornos" icon="rotate-ccw" href="/essenciais/estornos">
+    Como o saldo fica negativo.
+  </Card>
+  <Card title="withdrawal.paid" icon="webhook" href="/api-reference/webhooks/withdrawal-paid">
+    O evento que avisa quando o saque cai na conta.
+  </Card>
+</CardGroup>
+
+<Suporte />
