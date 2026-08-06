@@ -1,13 +1,18 @@
 ---
 title: "Valores em centavos"
-description: "Todo dinheiro nesta API é inteiro em centavos. Decimal é recusado com 422, e a recusa é deliberada."
+sidebarTitle: "Centavos"
+description: "Todo dinheiro nesta API é inteiro em centavos. Uma regra só, sem exceção, e o seu financeiro fecha no fim do mês."
+icon: "coins"
 ---
 
 import Suporte from "/snippets/suporte.mdx";
 
-Não há exceção. `amount`, `platform_fee`, `net_amount`, `refunded_amount`, `fee_returned`,
-`seller_debit`, `balance`, `available`, `reserved`, `debt` e `withdrawable` são inteiros em centavos
-de real.
+Uma regra só, e ela vale para todos os campos de dinheiro: **centavos inteiros**. R\$ 100,00 se
+envia como `10000`.
+
+Isso significa que você nunca precisa se perguntar qual formato um campo espera. `amount`,
+`platform_fee`, `net_amount`, `refunded_amount`, `fee_returned`, `seller_debit`, `balance`,
+`available`, `reserved`, `debt` e `withdrawable` seguem todos a mesma convenção.
 
 | Valor | Envie / receba |
 | --- | --- |
@@ -15,7 +20,7 @@ de real.
 | R\$ 10,50 | `1050` |
 | R\$ 1.234,56 | `123456` |
 
-```json Criar uma cobrança de R$ 100,00
+```json Cobrança de 10000 centavos (R\$ 100,00)
 {
   "amount": 10000,
   "description": "Curso de Vue 3",
@@ -23,13 +28,15 @@ de real.
 }
 ```
 
-## Por que decimal é recusado
+## Por que não aceitamos decimal
 
-Enviar `10.50` devolve `422`. Não convertemos por você, e não é rigor decorativo.
+Enviar `10.50` devolve `422`, e a explicação vale o minuto de leitura — ela é o motivo de a regra
+existir.
 
-Um decimal chega ao servidor como ponto flutuante. Ponto flutuante binário não representa a maioria
-dos valores decimais exatamente, e a multiplicação por 100 herda o erro. Os números abaixo são reais
-— o resultado é o mesmo em PHP, JavaScript e Python, porque os três usam IEEE 754 de 64 bits:
+Um decimal chega ao servidor como ponto flutuante, e ponto flutuante binário não representa a
+maioria dos valores decimais exatamente. A multiplicação por 100 herda esse erro. Os números abaixo
+são reais, e o resultado é o mesmo em PHP, JavaScript e Python, porque os três usam IEEE 754 de
+64 bits:
 
 | Você quis dizer | `valor * 100` | Truncado para inteiro |
 | --- | --- | --- |
@@ -37,9 +44,10 @@ dos valores decimais exatamente, e a multiplicação por 100 herda o erro. Os n�
 | R\$ 8,20 | `819.9999999999999` | `819` |
 | R\$ 0,29 | `28.999999999999996` | `28` |
 
-Um centavo a menos em cada venda não derruba nada no dia. Ele aparece na conciliação do mês, como
-uma diferença que não fecha e que ninguém sabe de onde veio. Diante de um decimal preferimos recusar
-a adivinhar a intenção — com dinheiro, adivinhar sai caro.
+Um centavo a menos por venda não aparece no dia. Ele aparece semanas depois, na conciliação do mês,
+como uma diferença que não fecha e cuja origem já se perdeu. Recusar o decimal na entrada é o que
+poupa você dessa investigação — preferimos devolver um erro claro agora a entregar um número
+silenciosamente errado.
 
 ## Como converter sem errar
 

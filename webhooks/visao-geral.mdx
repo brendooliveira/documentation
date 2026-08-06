@@ -1,6 +1,8 @@
 ---
 title: "Visão geral dos webhooks"
+sidebarTitle: "Visão geral"
 description: "Os três eventos que enviamos, como cadastrar endpoints e o que responder."
+icon: "webhook"
 ---
 
 import Suporte from "/snippets/suporte.mdx";
@@ -60,10 +62,11 @@ do evento é o **mesmo**, para a sua idempotência reconhecê-lo.
 
 Qualquer `2xx` encerra a entrega. Qualquer coisa fora dessa faixa agenda nova tentativa.
 
-<Warning>
-  Responda rápido e processe depois. Demorar vira retentativa, e retentativa em fluxo de dinheiro é
-  como um pagamento acaba contabilizado duas vezes. Grave o evento, responda `200`, processe em fila.
-</Warning>
+<Note>
+  Grave o evento, responda `200` e deixe o processamento para uma fila. Responder rápido é o que
+  evita que a retentativa chegue enquanto você ainda processa o primeiro. O padrão completo está em
+  [Entregas e retentativas](/webhooks/entregas-e-retentativas).
+</Note>
 
 ## Veja também
 

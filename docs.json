@@ -15,6 +15,9 @@
   "appearance": {
     "default": "system"
   },
+  "icons": {
+    "library": "lucide"
+  },
   "search": {
     "prompt": "Buscar na documentação da Vext"
   },
@@ -62,7 +65,7 @@
           },
           {
             "group": "Receitas",
-            "icon": "list-checks",
+            "icon": "route",
             "pages": [
               "receitas/checkout-pix",
               "receitas/conciliacao",
@@ -108,7 +111,7 @@
     "links": [
       {
         "label": "Suporte",
-        "href": "mailto:suporte@vext.com.br"
+        "href": "mailto:suporte@usevext.com"
       }
     ]
   },
@@ -125,7 +128,7 @@
       {
         "header": "Vext",
         "items": [
-          { "label": "Suporte", "href": "mailto:suporte@vext.com.br" }
+          { "label": "Suporte", "href": "mailto:suporte@usevext.com" }
         ]
       }
     ]

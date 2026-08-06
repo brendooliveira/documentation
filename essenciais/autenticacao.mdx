@@ -1,6 +1,7 @@
 ---
 title: "Autenticação"
 description: "Chave secreta no header, escopos por endpoint e a diferença entre 401 e 403."
+icon: "key-round"
 ---
 
 import UrlsBase from "/snippets/urls-base.mdx";
@@ -9,7 +10,7 @@ import Suporte from "/snippets/suporte.mdx";
 Toda chamada leva a chave no header:
 
 ```bash
-curl https://api.vext.com.br/v1/balance \
+curl https://api.usevext.com/v1/balance \
   -H "Authorization: Bearer sk_live_..."
 ```
 
@@ -24,9 +25,9 @@ Nem o suporte consegue recuperá-la, e é esse o ponto: um dump do nosso banco n
 nome de ninguém. Perdeu, gere outra e revogue a anterior.
 
 <Warning>
-  A chave vai no **servidor**. Colocá-la no JavaScript do navegador a entrega a qualquer pessoa que
-  abra as ferramentas de desenvolvedor da página — e com ela vêm as suas cobranças, os seus estornos
-  e o seu saldo.
+  Guarde a chave no **servidor**, nunca no JavaScript que chega ao navegador. Qualquer pessoa que
+  abra as ferramentas de desenvolvedor da página consegue lê-la de lá, e a chave dá acesso às suas
+  cobranças, aos seus estornos e ao seu saldo.
 </Warning>
 
 ## Ambientes

@@ -57,20 +57,24 @@ Português do Brasil. "Você" é quem integra. "Nós" é a Vext, e só aparece q
 decisão nossa — "guardamos apenas um hash SHA-256", "preferimos recusar a adivinhar". Nunca "o
 usuário deve" nem "recomenda-se". Instrução no imperativo.
 
-**A regra que define esta documentação: toda regra vem com o porquê, e o porquê é um modo de falha
-concreto.**
+**A regra que define esta documentação: comece pelo ganho, termine na consequência.**
 
-Padrão de três partes: [o que fazer] → [por que existe] → [o que quebra se você ignorar]. O modo de
-falha é concreto e caro, nunca abstrato:
+Padrão de três partes: [o que você ganha ou o que fazer] → [por que a regra existe] → [o que
+acontece sem ela]. A ordem importa. A mesma informação abre acolhendo ou abre acusando:
 
-> O centavo perdido só aparece na conciliação do mês.
+> ❌ Confira a assinatura antes de agir. Quem tem o segredo consegue forjar um `charge.paid`, e um
+> sistema que libera produto ao recebê-lo entregaria de graça.
 >
-> Um sistema que libera produto ao recebê-lo entregaria de graça.
->
-> Tratar uma venda devolvida pela metade como estornada faria seu relatório descontar o valor inteiro.
+> ✅ Conferir a assinatura leva poucas linhas de código e é o que garante que o evento veio mesmo de
+> nós. Sem ela, qualquer pessoa que descubra a URL do seu endpoint consegue simular um pagamento.
 
-Se você não consegue nomear o prejuízo, provavelmente a regra não precisa ser documentada. Nada de
-"por questões de segurança" ou "por boas práticas" — diga qual ataque, qual bug, qual prejuízo.
+A consequência continua lá, concreta e específica — ela só não é a primeira coisa que a pessoa lê.
+Nada de "por questões de segurança" ou "por boas práticas": diga qual ataque, qual bug, qual
+prejuízo. Se você não consegue nomear a consequência, provavelmente a regra não precisa ser
+documentada.
+
+Evite abrir parágrafo com proibição. "Nunca faça X" vira "Faça Y — é o que evita X". "Não há
+exceção" vira "Uma regra só, e ela vale para todos os campos".
 
 Diga explicitamente as distinções que geram chamado no suporte, em vez de deixá-las subentendidas:
 `null` não é zero, `403` não é `401`, `partially_refunded` não é `refunded`.
@@ -85,10 +89,19 @@ Diga explicitamente as distinções que geram chamado no suporte, em vez de deix
 - Títulos em sentence case, sem gerúndio de manual ("Verificar a assinatura", não "Verificando").
 - Dinheiro: sempre o inteiro em centavos e, na primeira menção do trecho, o equivalente —
   "`10000` (R\$ 100,00)".
-- **Escape o cifrão na prosa: `R\$`, não `R$`.** Dois `R$` na mesma linha viram delimitadores de
-  LaTeX, e o texto entre eles é renderizado como fórmula — acentos dentro disso quebram a build com
-  `unicodeTextInMathMode`. Dentro de crase e de bloco de código, use `R$` normal: ali não há
-  interpretação matemática, e o `\` apareceria literal.
+- **Cifrão: dois `R$` no mesmo trecho viram fórmula LaTeX.** O texto entre eles é renderizado como
+  math, e acentos ali dentro quebram a build com `unicodeTextInMathMode`. Onde vale a regra:
+
+  | Onde | O que fazer |
+  | --- | --- |
+  | Prosa, tabelas, componentes | Escape: `R\$` |
+  | Título de bloco de código | Escape: ` ```json Cobrança (R\$ 100,00) ` |
+  | `description` do frontmatter | **Não dá para escapar** — reescreva a frase com um `R$` só, ou nenhum |
+  | Dentro de crase e de bloco de código | `R$` normal; ali o `\` apareceria literal |
+
+  O `description` é a armadilha silenciosa: ele é renderizado como subtítulo da página, mas o
+  detector abaixo não distingue frontmatter de corpo. Se a build reclamar e a prosa estiver limpa,
+  olhe o frontmatter.
 
 ## Componentes
 

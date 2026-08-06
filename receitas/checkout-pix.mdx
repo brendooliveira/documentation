@@ -1,6 +1,8 @@
 ---
 title: "Checkout PIX de ponta a ponta"
+sidebarTitle: "Checkout PIX"
 description: "Do pedido no seu sistema à liberação do produto, com webhook e uma rede de segurança."
+icon: "qr-code"
 ---
 
 import AvisoCentavos from "/snippets/aviso-centavos.mdx";
@@ -25,7 +27,7 @@ $pedido->update(['chave_idempotencia' => (string) Str::uuid()]);
 
 $resposta = Http::withToken(config('services.vext.key'))
     ->withHeaders(['Idempotency-Key' => $pedido->chave_idempotencia])
-    ->post('https://api.vext.com.br/v1/charges', [
+    ->post('https://api.usevext.com/v1/charges', [
         'amount' => $pedido->total_em_centavos,   // inteiro, sempre
         'description' => $pedido->descricao,
         'reference' => "pedido-{$pedido->id}",
@@ -46,7 +48,7 @@ $pedido->update(['cobranca_id' => $cobranca['id']]);
 pedido.chaveIdempotencia ??= crypto.randomUUID();
 await pedido.save();
 
-const resposta = await fetch('https://api.vext.com.br/v1/charges', {
+const resposta = await fetch('https://api.usevext.com/v1/charges', {
   method: 'POST',
   headers: {
     Authorization: `Bearer ${process.env.VEXT_API_KEY}`,
@@ -76,7 +78,7 @@ pedido.chave_idempotencia = pedido.chave_idempotencia or str(uuid.uuid4())
 pedido.save()
 
 resposta = requests.post(
-    "https://api.vext.com.br/v1/charges",
+    "https://api.usevext.com/v1/charges",
     headers={
         "Authorization": f"Bearer {os.environ['VEXT_API_KEY']}",
         "Idempotency-Key": pedido.chave_idempotencia,
@@ -122,8 +124,8 @@ Exiba o vencimento a partir de `pix.expires_at`.
 <Step title="Aja no charge.paid, nunca antes">
 
 <Warning>
-  Não libere o produto na resposta de `POST /v1/charges`. Ela devolve `pending`. Liberar aí é
-  entregar para quem só gerou o QR e foi embora.
+  O produto é liberado no `charge.paid`, não na resposta de `POST /v1/charges` — essa devolve
+  `pending`, ou seja, o QR foi gerado mas ninguém pagou ainda.
 </Warning>
 
 No seu endpoint de webhook: confira a assinatura, grave o evento, responda `200`, processe em fila.
@@ -150,7 +152,7 @@ retentativas, o pedido fica pendente para sempre.
 Uma tarefa periódica que consulta as cobranças `pending` mais antigas que alguns minutos resolve:
 
 ```bash
-curl "https://api.vext.com.br/v1/charges?status=pending&created_to=2026-08-04T14:00:00-03:00" \
+curl "https://api.usevext.com/v1/charges?status=pending&created_to=2026-08-04T14:00:00-03:00" \
   -H "Authorization: Bearer sk_live_..."
 ```
 
@@ -172,10 +174,10 @@ devolveria a cobrança vencida.
 ## Veja também
 
 <CardGroup cols={2}>
-  <Card title="Conciliação" icon="list-checks" href="/receitas/conciliacao">
+  <Card title="Conciliação" icon="scale" href="/receitas/conciliacao">
     Fechar o dia e casar tudo com os seus pedidos.
   </Card>
-  <Card title="Ciclo de vida" icon="git-branch" href="/essenciais/ciclo-de-vida-da-cobranca">
+  <Card title="Ciclo de vida" icon="workflow" href="/essenciais/ciclo-de-vida-da-cobranca">
     Os sete estados e quando agir em cada um.
   </Card>
 </CardGroup>

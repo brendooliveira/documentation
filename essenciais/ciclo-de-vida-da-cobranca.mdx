@@ -1,6 +1,8 @@
 ---
 title: "Ciclo de vida da cobrança"
+sidebarTitle: "Ciclo de vida"
 description: "Os sete estados de uma cobrança PIX, quais são terminais e qual ainda admite estorno."
+icon: "workflow"
 ---
 
 import TabelaStatusCobranca from "/snippets/tabela-status-cobranca.mdx";
@@ -55,8 +57,8 @@ Uma cobrança `expired` não pode ser paga nem estornada. Para tentar de novo, c
 ## Em qual estado agir
 
 <Warning>
-  Aja em `charge.paid`, não na resposta de `POST /v1/charges`. A criação devolve `pending`: o QR
-  existe, e ninguém pagou nada ainda. Liberar produto nesse momento é entregar de graça.
+  O momento de liberar o produto é o `charge.paid`, não a resposta de `POST /v1/charges`. A criação
+  devolve `pending` — o QR já existe, mas o pagamento ainda não aconteceu.
 </Warning>
 
 As datas contam a história e vêm `null` até acontecerem: `created_at`, `paid_at`, `expired_at`,

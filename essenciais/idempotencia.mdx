@@ -1,6 +1,7 @@
 ---
 title: "Idempotência"
 description: "Como repetir um POST depois de um erro de rede sem cobrar duas vezes."
+icon: "repeat"
 ---
 
 import Suporte from "/snippets/suporte.mdx";
@@ -12,7 +13,7 @@ a única saída, e sem a chave a repetição cria uma segunda cobrança. Com ela
 primeira.
 
 ```bash
-curl -X POST https://api.vext.com.br/v1/charges \
+curl -X POST https://api.usevext.com/v1/charges \
   -H "Authorization: Bearer sk_live_..." \
   -H "Idempotency-Key: pedido-1042" \
   -H "Content-Type: application/json" \
@@ -44,8 +45,9 @@ Uma boa chave é estável e derivada do que você está tentando fazer — o nú
 gerado uma vez e gravado junto do pedido.
 
 <Warning>
-  Gere a chave **antes** da primeira tentativa e reutilize-a em todas as repetições. Uma chave nova a
-  cada volta do laço tem o mesmo efeito de não mandar chave nenhuma: cada tentativa vira uma cobrança.
+  Gere a chave **antes** da primeira tentativa e reutilize a mesma em todas as repetições. É esse
+  detalhe que faz a idempotência funcionar — uma chave nova a cada volta do laço tem o mesmo efeito
+  de não enviar chave nenhuma.
 </Warning>
 
 <CodeGroup>
@@ -56,7 +58,7 @@ $chave = $pedido->uuid;
 
 for ($tentativa = 1; $tentativa <= 3; $tentativa++) {
     $resposta = $http->withHeaders(['Idempotency-Key' => $chave])
-        ->post('https://api.vext.com.br/v1/charges', $corpo);
+        ->post('https://api.usevext.com/v1/charges', $corpo);
 
     if ($resposta->successful()) {
         break;
@@ -75,7 +77,7 @@ for ($tentativa = 1; $tentativa <= 3; $tentativa++) {
 const chave = pedido.uuid;
 
 for (let tentativa = 1; tentativa <= 3; tentativa++) {
-  const resposta = await fetch('https://api.vext.com.br/v1/charges', {
+  const resposta = await fetch('https://api.usevext.com/v1/charges', {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${process.env.VEXT_API_KEY}`,
@@ -98,7 +100,7 @@ chave = pedido.uuid
 
 for tentativa in range(1, 4):
     resposta = requests.post(
-        "https://api.vext.com.br/v1/charges",
+        "https://api.usevext.com/v1/charges",
         headers={
             "Authorization": f"Bearer {os.environ['VEXT_API_KEY']}",
             "Idempotency-Key": chave,

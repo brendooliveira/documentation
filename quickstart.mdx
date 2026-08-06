@@ -1,6 +1,7 @@
 ---
 title: "Primeira cobrança"
 description: "Do sk_test_ ao QR na tela, com o webhook de confirmação já ligado."
+icon: "zap"
 ---
 
 import AvisoCentavos from "/snippets/aviso-centavos.mdx";
@@ -27,7 +28,7 @@ ele que você reencontra a cobrança depois.
 <CodeGroup>
 
 ```bash cURL
-curl -X POST https://api.vext.com.br/v1/charges \
+curl -X POST https://api.usevext.com/v1/charges \
   -H "Authorization: Bearer sk_test_..." \
   -H "Idempotency-Key: pedido-1042" \
   -H "Content-Type: application/json" \
@@ -47,7 +48,7 @@ curl -X POST https://api.vext.com.br/v1/charges \
 ```php PHP
 $resposta = Http::withToken(config('services.vext.key'))
     ->withHeaders(['Idempotency-Key' => 'pedido-1042'])
-    ->post('https://api.vext.com.br/v1/charges', [
+    ->post('https://api.usevext.com/v1/charges', [
         'amount' => 10000,                   // R$ 100,00 em centavos inteiros
         'description' => 'Curso de Vue 3',
         'reference' => 'pedido-1042',
@@ -63,7 +64,7 @@ $cobranca = $resposta->json();
 ```
 
 ```javascript JavaScript
-const resposta = await fetch('https://api.vext.com.br/v1/charges', {
+const resposta = await fetch('https://api.usevext.com/v1/charges', {
   method: 'POST',
   headers: {
     Authorization: `Bearer ${process.env.VEXT_API_KEY}`,
@@ -88,7 +89,7 @@ const cobranca = await resposta.json();
 
 ```python Python
 resposta = requests.post(
-    "https://api.vext.com.br/v1/charges",
+    "https://api.usevext.com/v1/charges",
     headers={
         "Authorization": f"Bearer {os.environ['VEXT_API_KEY']}",
         "Idempotency-Key": "pedido-1042",
@@ -176,9 +177,9 @@ Cadastre o seu endpoint em **Desenvolvedores**. Quando o PIX for confirmado, env
 ```
 
 <Warning>
-  **Confira a assinatura antes de agir.** Quem tem o segredo consegue forjar este evento, e um
-  sistema que libera produto ao recebê-lo entregaria de graça. O código pronto, nas quatro
-  linguagens, está em [Verificar a assinatura](/webhooks/assinatura).
+  Antes de liberar o produto, confirme que o evento veio mesmo de nós. São poucas linhas de código,
+  prontas nas quatro linguagens em [Verificar a assinatura](/webhooks/assinatura). Sem essa
+  checagem, quem descobrir a URL do seu endpoint consegue simular um pagamento.
 </Warning>
 
 Depois de conferir: grave o evento, responda `200`, e processe em fila. Só aí libere o produto.
@@ -190,7 +191,7 @@ Depois de conferir: grave o evento, responda `200`, e processe em fila. Só aí 
 Consulte a cobrança e veja `status: "paid"`:
 
 ```bash
-curl https://api.vext.com.br/v1/charges/ch_01k1y6r6m6q2x0p3d9v4t7c8n2 \
+curl https://api.usevext.com/v1/charges/ch_01k1y6r6m6q2x0p3d9v4t7c8n2 \
   -H "Authorization: Bearer sk_test_..."
 ```
 

@@ -1,31 +1,33 @@
 ---
 title: "Estornos"
-description: "Por que saem R$ 93,01 do vendedor quando você estorna R$ 100,00, e por que estorno nunca é barrado por falta de saldo."
+description: "Quem paga o quê quando um estorno acontece, e por que estorno nunca é barrado por falta de saldo."
+icon: "rotate-ccw"
 ---
 
 import Suporte from "/snippets/suporte.mdx";
 
 Estornar devolve o dinheiro ao comprador, no todo ou em parte.
 
-```bash Estorno parcial de R$ 40,00
-curl -X POST https://api.vext.com.br/v1/charges/ch_01k1y6r6m6q2x0p3d9v4t7c8n2/refund \
+```bash Estorno parcial de 4000 centavos
+curl -X POST https://api.usevext.com/v1/charges/ch_01k1y6r6m6q2x0p3d9v4t7c8n2/refund \
   -H "Authorization: Bearer sk_live_..." \
   -H "Idempotency-Key: estorno-pedido-1042" \
   -H "Content-Type: application/json" \
   -d '{"amount": 4000, "reason": "Devolução de um item"}'
 ```
 
-<Warning>
-  Omitir `amount` devolve **o que ainda cabe estornar** — e não o valor da venda. Numa cobrança já
-  devolvida pela metade, mandar o valor cheio de volta tiraria o dinheiro duas vezes do vendedor.
-</Warning>
+<Note>
+  Omitir `amount` devolve **o que ainda cabe estornar**, e não o valor cheio da venda. É o padrão
+  seguro: numa cobrança já devolvida pela metade, ele evita que o dinheiro saia duas vezes do
+  vendedor.
+</Note>
 
 ## Três números, três perguntas
 
 Esta é a parte que gera chamado no suporte: você estorna R\$ 100,00 e vê R\$ 93,01 saírem do vendedor.
 Não é erro. Os campos vêm separados justamente para responder isso sem precisar perguntar.
 
-```json Estorno integral de uma venda de R$ 100,00
+```json Estorno integral de uma venda de 10000 centavos
 {
   "object": "refund",
   "id": "rf_01k1y7c3n8b5w2q9r4t6y8u1i3",

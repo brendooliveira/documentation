@@ -1,6 +1,8 @@
 ---
 title: "Conciliar cobranças com os seus pedidos"
+sidebarTitle: "Conciliação"
 description: "Use reference como chave de ligação e feche o dia com GET /v1/charges."
+icon: "scale"
 ---
 
 import Suporte from "/snippets/suporte.mdx";
@@ -15,7 +17,7 @@ em que a sua tabela de pedidos perdeu a coluna, ou quando alguém do financeiro 
 venda a partir do número do pedido e não tem acesso ao seu banco.
 
 ```bash Reencontrar pelo seu número de pedido
-curl "https://api.vext.com.br/v1/charges?reference=pedido-1042" \
+curl "https://api.usevext.com/v1/charges?reference=pedido-1042" \
   -H "Authorization: Bearer sk_live_..."
 ```
 
@@ -24,7 +26,7 @@ curl "https://api.vext.com.br/v1/charges?reference=pedido-1042" \
 Combine `status`, `created_from` e `created_to`:
 
 ```bash Tudo que foi pago em agosto
-curl -G "https://api.vext.com.br/v1/charges" \
+curl -G "https://api.usevext.com/v1/charges" \
   -H "Authorization: Bearer sk_live_..." \
   --data-urlencode "status=paid" \
   --data-urlencode "created_from=2026-08-01T00:00:00-03:00" \
@@ -48,7 +50,7 @@ $pagina = 1;
 
 do {
     $resposta = Http::withToken(config('services.vext.key'))
-        ->get('https://api.vext.com.br/v1/charges', [
+        ->get('https://api.usevext.com/v1/charges', [
             'status' => 'paid',
             'created_from' => $inicio,
             'created_to' => $fim,
@@ -70,7 +72,7 @@ let pagina = 1;
 let temMais = true;
 
 while (temMais) {
-  const url = new URL('https://api.vext.com.br/v1/charges');
+  const url = new URL('https://api.usevext.com/v1/charges');
   url.search = new URLSearchParams({
     status: 'paid',
     created_from: inicio,
@@ -96,7 +98,7 @@ tem_mais = True
 
 while tem_mais:
     resposta = requests.get(
-        "https://api.vext.com.br/v1/charges",
+        "https://api.usevext.com/v1/charges",
         headers={"Authorization": f"Bearer {os.environ['VEXT_API_KEY']}"},
         params={
             "status": "paid",

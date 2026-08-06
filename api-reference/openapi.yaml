@@ -25,10 +25,10 @@ info:
 
   contact:
     name: Suporte Vext
-    email: suporte@vext.com.br
+    email: suporte@usevext.com
 
 servers:
-  - url: https://api.vext.com.br
+  - url: https://api.usevext.com
     description: Produção
 
 security:

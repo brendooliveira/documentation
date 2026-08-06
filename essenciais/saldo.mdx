@@ -1,6 +1,7 @@
 ---
 title: "Saldo do vendedor"
 description: "Quatro números que respondem perguntas diferentes, e por que null não é zero."
+icon: "wallet"
 ---
 
 import Suporte from "/snippets/suporte.mdx";
@@ -59,8 +60,9 @@ Quando a consulta ao provedor falha, `provider` e `withdrawable` vêm `null`:
 ```
 
 <Warning>
-  Zero diria que não há dinheiro. `null` diz que houve uma consulta que não respondeu. Uma tela que
-  renderiza `null` como `R$ 0,00` informa ao vendedor que ele está sem saldo quando ele não está.
+  Trate `null` e zero de formas diferentes na sua interface. Zero significa que não há dinheiro;
+  `null` significa que a consulta ao provedor não respondeu. Uma tela que renderiza `null` como
+  `R$ 0,00` diz ao vendedor que ele está sem saldo quando ele não está.
 </Warning>
 
 Mostre "indisponível no momento" e ofereça recarregar. O resto do saldo, que é nosso, continua

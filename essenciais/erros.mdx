@@ -1,6 +1,7 @@
 ---
 title: "Erros"
 description: "Um envelope único, sete famílias de tipo e o catálogo estável de códigos."
+icon: "triangle-alert"
 ---
 
 import TabelaErros from "/snippets/tabela-erros.mdx";
@@ -20,8 +21,9 @@ Todo erro — inclusive os que não previmos — tem a mesma forma:
 ```
 
 <Warning>
-  Trate pelo `code`, nunca pela `message`. O código é contrato; o texto pode ser reescrito a qualquer
-  momento, e um `if` que compara a mensagem quebra silenciosamente na primeira vez que a melhorarmos.
+  Baseie a sua lógica no `code`. Ele é contrato e não muda. A `message` é escrita para gente ler e
+  pode ser reescrita a qualquer momento — inclusive para ficar melhor. Quando isso acontece, um `if`
+  que compara a mensagem para de funcionar sem avisar.
 </Warning>
 
 ## As sete famílias

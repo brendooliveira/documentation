@@ -45,6 +45,16 @@ Antes de abrir um PR:
 mint broken-links
 ```
 
+E confira que nenhum cifrão escapou sem escape na prosa — dois `R$` na mesma linha viram fórmula
+LaTeX e quebram a build (ver `AGENTS.md`):
+
+```bash
+grep -rn 'R\$' --include='*.mdx' . | grep -v 'R\\\$'
+```
+
+Ocorrências dentro de crase e de bloco de código são esperadas; o que não pode aparecer é `R$` solto
+no texto corrido.
+
 ## Publicação
 
 O app do GitHub da Mintlify propaga as mudanças do repositório para o deploy. Alterações na branch

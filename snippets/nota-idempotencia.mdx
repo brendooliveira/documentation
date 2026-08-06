@@ -1,5 +1,5 @@
 <Note>
-  Envie `Idempotency-Key` nesta chamada. Sem ela, uma repetição depois de um erro de rede
-  cria um segundo recurso — e você não tem como saber se o primeiro existiu.
+  Envie `Idempotency-Key` nesta chamada e você pode repetir com tranquilidade depois de um erro de
+  rede: a mesma chave devolve o recurso que já existe, em vez de criar um segundo.
   Veja [Idempotência](/essenciais/idempotencia).
 </Note>

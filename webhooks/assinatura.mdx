@@ -1,16 +1,20 @@
 ---
 title: "Verificar a assinatura"
-description: "Como conferir o X-Vext-Signature sobre o corpo bruto, e por que recusar timestamps de mais de 5 minutos."
+description: "Confirme que o evento veio mesmo da Vext antes de agir sobre ele. São poucas linhas de código, prontas nas quatro linguagens."
+icon: "shield-check"
 ---
 
 import VerificarAssinatura from "/snippets/verificar-assinatura.mdx";
 import Suporte from "/snippets/suporte.mdx";
 
-<Warning>
-  Confira a assinatura **antes** de agir. Quem tem o segredo consegue forjar um `charge.paid`, e um
-  sistema que libera produto ao recebê-lo entregaria de graça para qualquer pessoa que descobrisse a
-  URL do seu endpoint.
-</Warning>
+Conferir a assinatura leva poucas linhas de código e é o que garante que o evento veio mesmo de nós.
+Sem ela, qualquer pessoa que descubra a URL do seu endpoint consegue simular um pagamento — então
+vale fazer isso antes de qualquer outra coisa no seu handler.
+
+O código pronto está logo abaixo, nas quatro linguagens. Se quiser só copiar e seguir,
+[pule para a implementação](#implementação).
+
+## Como a assinatura é montada
 
 Toda entrega chega com o header:
 
@@ -26,37 +30,41 @@ HMAC-SHA256("<timestamp>.<corpo bruto>", <segredo do endpoint>)
 
 O segredo é o do endpoint que recebeu a entrega, disponível em **Desenvolvedores**.
 
-## As duas regras
+## Dois detalhes que fazem a conferência funcionar
 
-**1. Calcule sobre o corpo bruto, antes de desserializar.**
+**1. Use o corpo bruto, antes de desserializar.**
 
-Reserializar muda espaçamento e ordem de chaves, e o HMAC deixa de bater. Na prática isso significa
-`$request->getContent()` no Laravel, `express.raw()` no Express e `request.get_data()` no Flask —
-nunca `->all()`, `express.json()` ou `request.json`.
+O HMAC é calculado sobre os bytes exatos que enviamos. Desserializar e reserializar muda espaçamento
+e ordem de chaves, e aí a conta não fecha — é a causa mais comum de "minha assinatura nunca bate".
 
-**2. Recuse timestamps com mais de 5 minutos.**
+Na prática: `$request->getContent()` no Laravel, `express.raw()` no Express e `request.get_data()`
+no Flask, em vez de `->all()`, `express.json()` ou `request.json`.
 
-É isso que impede alguém que interceptou uma entrega de `charge.paid` de reenviá-la quantas vezes
-quiser. A assinatura dela é perfeitamente válida para sempre; só a janela a torna inútil.
+**2. Aceite só timestamps dos últimos 5 minutos.**
+
+A assinatura de uma entrega continua válida para sempre, então a janela de tempo é o que impede que
+uma entrega antiga de `charge.paid` seja reenviada mais tarde. São duas linhas, e é o que separa uma
+verificação decorativa de uma que protege de verdade.
 
 ## Implementação
 
 <VerificarAssinatura />
 
 <Note>
-  Compare em tempo constante: `hash_equals`, `crypto.timingSafeEqual` ou `hmac.compare_digest`.
-  Uma comparação comum de strings sai no primeiro byte diferente, e a diferença de tempo entre uma
-  tentativa e outra permite descobrir a assinatura correta byte a byte.
+  Repare que os três exemplos comparam em tempo constante — `hash_equals`,
+  `crypto.timingSafeEqual`, `hmac.compare_digest`. Uma comparação comum de strings para no primeiro
+  byte diferente, e essa diferença de tempo é suficiente para alguém descobrir a assinatura correta
+  byte a byte. Vale manter essa parte como está ao adaptar o código.
 </Note>
 
 ## Depois de conferir
 
-Só então desserialize e trate o evento. Responda `2xx` rápido e processe em fila — ver
-[Entregas e retentativas](/webhooks/entregas-e-retentativas).
+Com a assinatura confirmada, desserialize e siga: responda `2xx` rápido e deixe o processamento para
+uma fila. O padrão está em [Entregas e retentativas](/webhooks/entregas-e-retentativas).
 
-Se a assinatura não bate, responda `400` e registre o `X-Vext-Delivery` no seu log. Não processe
-"por via das dúvidas": um evento que não passou na verificação ou é adulterado, ou o segredo está
-errado, e nos dois casos agir é pior que não agir.
+Se a assinatura não bater, responda `400` e registre o `X-Vext-Delivery` no seu log. Os dois motivos
+possíveis são um evento adulterado ou um segredo desatualizado, e o log com o `X-Vext-Delivery` é o
+que nos permite dizer qual dos dois foi.
 
 ## Veja também
 

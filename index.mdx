@@ -1,6 +1,7 @@
 ---
 title: "Introdução"
 description: "Cobranças PIX com split, estornos e saldo do vendedor. O que a API faz, o que ela recusa e por quê."
+icon: "house"
 ---
 
 import UrlsBase from "/snippets/urls-base.mdx";
@@ -19,43 +20,44 @@ cobrança, mostra o QR ao comprador, e nós avisamos quando o dinheiro entra.
   <Card title="Webhooks" icon="webhook" href="/webhooks/visao-geral">
     Os três eventos e como conferir a assinatura.
   </Card>
-  <Card title="Receitas" icon="list-checks" href="/receitas/checkout-pix">
+  <Card title="Receitas" icon="route" href="/receitas/checkout-pix">
     Fluxos completos, do checkout à conciliação.
   </Card>
 </CardGroup>
 
-## Quatro regras que valem para tudo
+## Quatro convenções que valem para tudo
 
-Elas reaparecem em cada página adiante. Se você ler só esta seção, já evita os quatro erros que mais
-chegam ao suporte.
+São quatro decisões de design que se repetem em toda a API. Conhecendo elas, o resto da
+documentação fica previsível — e você evita os quatro tropeços mais comuns de quem começa.
 
 <AccordionGroup>
 
 <Accordion title="Dinheiro é sempre centavos inteiros" icon="coins">
-  R\$ 100,00 se envia como `10000`. Um decimal devolve `422`, e a recusa é deliberada: `19.99 * 100`
-  dá `1998.9999999999998` em ponto flutuante, o truncamento vira `1998`, e o centavo perdido só
-  aparece na conciliação do mês.
+  R\$ 100,00 se envia como `10000`. Uma convenção só, em todos os campos, então nunca há dúvida
+  sobre o formato. Decimais são recusados com `422` porque `19.99 * 100` dá `1998.9999999999998` em
+  ponto flutuante — e o centavo perdido aí só apareceria na conciliação do mês.
 
   [Valores em centavos →](/essenciais/valores-em-centavos)
 </Accordion>
 
-<Accordion title="A chave secreta fica no servidor" icon="key">
-  O valor em claro aparece **uma única vez**, na criação — guardamos apenas um hash SHA-256.
-  Colocá-la no navegador do comprador a entrega a qualquer pessoa que abra a página.
+<Accordion title="A chave secreta fica no servidor" icon="key-round">
+  O valor em claro aparece **uma única vez**, na criação: guardamos apenas um hash SHA-256, de modo
+  que nem um vazamento do nosso banco permite cobrar em seu nome. Em troca, a chave é sua para
+  guardar — e o lugar dela é o servidor, nunca o navegador do comprador.
 
   [Autenticação →](/essenciais/autenticacao)
 </Accordion>
 
 <Accordion title="Idempotency-Key em todo POST" icon="repeat">
-  A conexão que cai depois da requisição e antes da resposta deixa você sem saber se cobrou. Repetir
-  com a mesma chave resolve isso sem risco de cobrar duas vezes.
+  Com ela, uma conexão que cai entre a requisição e a resposta deixa de ser um problema: você repete
+  com a mesma chave e recebe a cobrança que já existe, em vez de criar uma segunda.
 
   [Idempotência →](/essenciais/idempotencia)
 </Accordion>
 
-<Accordion title="Trate o erro pelo code, nunca pela message" icon="triangle-alert">
-  O `code` é contrato; o texto pode ser reescrito a qualquer momento. Um `if` que compara a mensagem
-  quebra silenciosamente na primeira vez que a melhorarmos.
+<Accordion title="Erros têm código estável" icon="triangle-alert">
+  Todo erro traz um `code` que não muda, então dá para escrever a sua lógica em cima dele com
+  segurança. A `message` fica livre para ser reescrita e melhorada sem quebrar a sua integração.
 
   [Erros →](/essenciais/erros)
 </Accordion>
@@ -82,17 +84,17 @@ chegam ao suporte.
 | [`charge.refunded`](/api-reference/webhooks/charge-refunded) | Um estorno é concluído |
 | [`withdrawal.paid`](/api-reference/webhooks/withdrawal-paid) | O saque cai na conta do vendedor |
 
-## O que a API não faz
+## Três coisas que vale saber de antemão
 
-Vale saber antes de procurar:
+Para você não procurar o que não existe:
 
-- **Não devolvemos a imagem do QR.** Só o payload copia-e-cola, em `pix.qr_code`. A imagem você gera
-  localmente — mandar um PNG em base64 em toda resposta multiplicaria o corpo por algo que leva
-  milissegundos do seu lado.
-- **Não há endpoint de saque.** O saque é pedido pelo painel; a API só avisa quando ele cai, por
-  `withdrawal.paid`.
-- **Não expomos dados de outras contas.** A lista devolve apenas as cobranças do vendedor dono da
-  chave, e o `404` de uma cobrança alheia é o mesmo `404` de uma que não existe.
+- **A imagem do QR você gera.** Devolvemos o payload copia-e-cola em `pix.qr_code`, e qualquer
+  biblioteca de QR o transforma em imagem em milissegundos. Assim as respostas ficam leves e você
+  controla tamanho, cor e formato.
+- **O saque é pedido pelo painel.** A API não tem endpoint para isso, mas avisa quando o dinheiro
+  cai, pelo evento `withdrawal.paid`.
+- **Cada chave enxerga só a própria conta.** A lista devolve apenas as cobranças do vendedor dono da
+  chave, e uma cobrança de outra conta responde o mesmo `404` de uma que não existe.
 
 ## URL base
 

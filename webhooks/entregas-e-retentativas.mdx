@@ -1,6 +1,7 @@
 ---
 title: "Entregas e retentativas"
 description: "Qualquer 2xx encerra a entrega; o resto agenda nova tentativa. Como deduplicar pelo id do evento."
+icon: "send"
 ---
 
 import Suporte from "/snippets/suporte.mdx";
@@ -11,9 +12,9 @@ agenda nova tentativa.
 ## Responda rápido, processe depois
 
 <Warning>
-  Demorar vira retentativa, e retentativa em fluxo de dinheiro é como um pagamento acaba contabilizado
-  duas vezes. Se o seu handler leva 30 segundos para liberar o acesso, você vai receber o mesmo evento
-  de novo enquanto ainda está processando o primeiro.
+  Responder rápido é o que evita entrega duplicada. Se o seu handler leva 30 segundos para liberar o
+  acesso, a retentativa chega enquanto o primeiro evento ainda está sendo processado — e em fluxo de
+  dinheiro isso vira um pagamento contabilizado duas vezes.
 </Warning>
 
 O padrão que resolve isso tem três passos:

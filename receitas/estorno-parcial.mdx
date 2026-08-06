@@ -1,6 +1,7 @@
 ---
 title: "Estorno parcial"
-description: "A aritmética de devolver R$ 40,00 de uma venda de R$ 100,00 e o que o vendedor vê depois."
+description: "Como devolver parte de uma venda, a conta que o vendedor vê depois e o webhook que chega em seguida."
+icon: "undo-2"
 ---
 
 import AvisoCentavos from "/snippets/aviso-centavos.mdx";
@@ -16,7 +17,7 @@ inteira.
 <CodeGroup>
 
 ```bash cURL
-curl -X POST https://api.vext.com.br/v1/charges/ch_01k1y6r6m6q2x0p3d9v4t7c8n2/refund \
+curl -X POST https://api.usevext.com/v1/charges/ch_01k1y6r6m6q2x0p3d9v4t7c8n2/refund \
   -H "Authorization: Bearer sk_live_..." \
   -H "Idempotency-Key: estorno-pedido-1042-item-2" \
   -H "Content-Type: application/json" \
@@ -26,7 +27,7 @@ curl -X POST https://api.vext.com.br/v1/charges/ch_01k1y6r6m6q2x0p3d9v4t7c8n2/re
 ```php PHP
 $resposta = Http::withToken(config('services.vext.key'))
     ->withHeaders(['Idempotency-Key' => "estorno-{$devolucao->id}"])
-    ->post("https://api.vext.com.br/v1/charges/{$pedido->cobranca_id}/refund", [
+    ->post("https://api.usevext.com/v1/charges/{$pedido->cobranca_id}/refund", [
         'amount' => $devolucao->valor_em_centavos,   // omita para devolver todo o restante
         'reason' => 'Devolução de um item',
     ]);
@@ -34,7 +35,7 @@ $resposta = Http::withToken(config('services.vext.key'))
 
 ```javascript JavaScript
 const resposta = await fetch(
-  `https://api.vext.com.br/v1/charges/${pedido.cobrancaId}/refund`,
+  `https://api.usevext.com/v1/charges/${pedido.cobrancaId}/refund`,
   {
     method: 'POST',
     headers: {
@@ -52,7 +53,7 @@ const resposta = await fetch(
 
 ```python Python
 resposta = requests.post(
-    f"https://api.vext.com.br/v1/charges/{pedido.cobranca_id}/refund",
+    f"https://api.usevext.com/v1/charges/{pedido.cobranca_id}/refund",
     headers={
         "Authorization": f"Bearer {os.environ['VEXT_API_KEY']}",
         "Idempotency-Key": f"estorno-{devolucao.id}",
@@ -67,8 +68,8 @@ resposta = requests.post(
 </CodeGroup>
 
 <Warning>
-  Envie `amount` sempre que o estorno for parcial. Omitir devolve **todo o saldo estornável** da
-  cobrança — numa venda de R\$ 100,00 ainda intacta, isso são R\$ 100,00, e não os R\$ 40,00 que você
+  Envie `amount` sempre que o estorno for parcial. Sem ele, devolvemos **todo o saldo estornável**
+  da cobrança — numa venda de R\$ 100,00 intacta, isso são R\$ 100,00, e não os R\$ 40,00 que você
   queria.
 </Warning>
 

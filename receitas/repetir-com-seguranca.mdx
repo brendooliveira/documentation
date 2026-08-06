@@ -1,6 +1,8 @@
 ---
 title: "Repetir requisições com segurança"
+sidebarTitle: "Repetir com segurança"
 description: "Quais códigos merecem retry, com que espera, e sempre com a mesma Idempotency-Key."
+icon: "history"
 ---
 
 import Suporte from "/snippets/suporte.mdx";
@@ -36,8 +38,8 @@ caminho — você não tem como saber. Repetir sem chave criaria a segunda cobra
 você recebe a primeira, com `Idempotent-Replayed: true`.
 
 <Warning>
-  Nunca gere uma chave nova ao repetir. É o erro que transforma uma indisponibilidade momentânea do
-  provedor em uma cobrança duplicada no cartão do comprador.
+  Reutilize a mesma chave ao repetir. É exatamente isso que transforma uma indisponibilidade
+  momentânea do provedor em uma nova tentativa segura, em vez de uma segunda cobrança.
 </Warning>
 
 ## Backoff exponencial
@@ -51,7 +53,7 @@ $repetiveis = [408, 409, 429, 500, 502, 503];
 for ($tentativa = 0; $tentativa < 5; $tentativa++) {
     $resposta = Http::withToken(config('services.vext.key'))
         ->withHeaders(['Idempotency-Key' => $chave])
-        ->post('https://api.vext.com.br/v1/charges', $corpo);
+        ->post('https://api.usevext.com/v1/charges', $corpo);
 
     if ($resposta->successful()) {
         return $resposta->json();
@@ -76,7 +78,7 @@ const chave = pedido.chaveIdempotencia; // gerada uma vez, antes da primeira ten
 const repetiveis = [408, 409, 429, 500, 502, 503];
 
 for (let tentativa = 0; tentativa < 5; tentativa++) {
-  const resposta = await fetch('https://api.vext.com.br/v1/charges', {
+  const resposta = await fetch('https://api.usevext.com/v1/charges', {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${process.env.VEXT_API_KEY}`,
@@ -108,7 +110,7 @@ REPETIVEIS = {408, 409, 429, 500, 502, 503}
 
 for tentativa in range(5):
     resposta = requests.post(
-        "https://api.vext.com.br/v1/charges",
+        "https://api.usevext.com/v1/charges",
         headers={
             "Authorization": f"Bearer {os.environ['VEXT_API_KEY']}",
             "Idempotency-Key": chave,
