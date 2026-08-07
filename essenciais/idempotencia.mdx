@@ -17,7 +17,16 @@ curl -X POST https://api.usevext.com/v1/charges \
   -H "Authorization: Bearer sk_live_..." \
   -H "Idempotency-Key: pedido-1042" \
   -H "Content-Type: application/json" \
-  -d '{"amount": 10000, "customer": {"name": "João Comprador"}}'
+  -d '{
+    "amount": 10000,
+    "customer": {
+      "name": "João Comprador",
+      "email": "joao@exemplo.com.br",
+      "document": "11144477735",
+      "phone_ddd": "11",
+      "phone_number": "987654321"
+    }
+  }'
 ```
 
 ## Os três desfechos

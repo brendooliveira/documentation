@@ -37,6 +37,8 @@ $resposta = Http::withToken(config('services.vext.key'))
             'email' => $pedido->cliente->email,
             'document' => $pedido->cliente->cpf,
             'document_type' => 'CPF',
+            'phone_ddd' => $pedido->cliente->ddd,
+            'phone_number' => $pedido->cliente->telefone,
         ],
     ]);
 
@@ -65,6 +67,8 @@ const resposta = await fetch('https://api.usevext.com/v1/charges', {
       email: pedido.cliente.email,
       document: pedido.cliente.cpf,
       document_type: 'CPF',
+      phone_ddd: pedido.cliente.ddd,
+      phone_number: pedido.cliente.telefone,
     },
   }),
 });
@@ -93,6 +97,8 @@ resposta = requests.post(
             "email": pedido.cliente.email,
             "document": pedido.cliente.cpf,
             "document_type": "CPF",
+            "phone_ddd": pedido.cliente.ddd,
+            "phone_number": pedido.cliente.telefone,
         },
     },
 )

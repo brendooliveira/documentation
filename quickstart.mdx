@@ -40,7 +40,9 @@ curl -X POST https://api.usevext.com/v1/charges \
       "name": "João Comprador",
       "email": "joao@exemplo.com.br",
       "document": "11144477735",
-      "document_type": "CPF"
+      "document_type": "CPF",
+      "phone_ddd": "11",
+      "phone_number": "987654321"
     }
   }'
 ```
@@ -57,6 +59,8 @@ $resposta = Http::withToken(config('services.vext.key'))
             'email' => 'joao@exemplo.com.br',
             'document' => '11144477735',
             'document_type' => 'CPF',
+            'phone_ddd' => '11',
+            'phone_number' => '987654321',
         ],
     ]);
 
@@ -80,6 +84,8 @@ const resposta = await fetch('https://api.usevext.com/v1/charges', {
       email: 'joao@exemplo.com.br',
       document: '11144477735',
       document_type: 'CPF',
+      phone_ddd: '11',
+      phone_number: '987654321',
     },
   }),
 });
@@ -103,6 +109,8 @@ resposta = requests.post(
             "email": "joao@exemplo.com.br",
             "document": "11144477735",
             "document_type": "CPF",
+            "phone_ddd": "11",
+            "phone_number": "987654321",
         },
     },
 )
@@ -129,7 +137,7 @@ A resposta vem `201`:
   "pix": {
     "qr_code": "00020101021226840014br.gov.bcb.pix2562qrcodepix.example.com/v2/abcd1234",
     "expires_at": "2026-08-04T15:00:00+00:00",
-    "end_2_end_id": null
+    "end_to_end_id": null
   },
   "created_at": "2026-08-04T14:00:00+00:00",
   "paid_at": null

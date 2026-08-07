@@ -7,25 +7,83 @@ info:
   description: |
     API pública do gateway. Todo endpoint desta versão vive sob `/v1`.
 
-    Quatro regras valem para toda chamada. Cada uma tem uma página própria
-    nos guias, com exemplos nas quatro linguagens.
+    ## Dinheiro é sempre CENTAVOS INTEIROS
 
-    - **Dinheiro é sempre centavos inteiros.** R$ 100,00 se envia como
-      `10000`; um decimal devolve `422`. Ver
-      [Valores em centavos](/essenciais/valores-em-centavos).
-    - **A chave secreta vai no header e fica no servidor.** Cada chave
-      carrega escopos; fora do escopo devolve `403`, e não `401`. Ver
-      [Autenticação](/essenciais/autenticacao).
-    - **Envie `Idempotency-Key` em todo `POST`.** Repetir com a mesma chave
-      devolve a resposta gravada em vez de criar um segundo recurso. Ver
-      [Idempotência](/essenciais/idempotencia).
-    - **Trate os erros pelo `code`**, nunca pela `message` - o código é
-      contrato, o texto pode ser reescrito a qualquer momento. Ver
-      [Erros](/essenciais/erros).
+    Não há exceção. `amount`, `platform_fee`, `net_amount`, `refunded_amount`,
+    `fee_returned`, `seller_debit`, `balance`, `available`, `reserved`, `debt`
+    e `withdrawable` são inteiros em centavos de real.
+
+    | Valor       | Envie / receba |
+    |-------------|----------------|
+    | R$ 1,00     | `100`          |
+    | R$ 10,50    | `1050`         |
+    | R$ 1.234,56 | `123456`       |
+
+    Enviar `10.50` devolve `422`. A recusa é deliberada: `10.50` chega ao
+    servidor como ponto flutuante, `10.50 * 100` não é exatamente `1050` em
+    binário, e o centavo perdido só aparece na conciliação do mês. Diante de
+    um decimal preferimos recusar a adivinhar a intenção - com dinheiro,
+    adivinhar sai caro.
+
+    ## Autenticação
+
+    Toda chamada leva a chave no header:
+
+    ```
+    Authorization: Bearer sk_live_...
+    ```
+
+    A chave é criada em **Desenvolvedores** no painel e o valor em claro
+    aparece **uma única vez**, na criação - guardamos apenas um hash
+    SHA-256. Perdeu, gere outra.
+
+    Cada chave carrega escopos (`charges:read`, `charges:write`,
+    `refunds:write`, `balance:read`). Chamar um endpoint fora do escopo
+    devolve `403`, e não `401`: a chave está certa, faltou permissão.
+
+    Chaves de teste usam o prefixo `sk_test_`. A diferença é visível a olho
+    nu de propósito - uma chave de teste colada em produção precisa ser
+    reconhecível antes de alguém passar a tarde investigando.
+
+    ## Idempotência
+
+    Envie `Idempotency-Key` em todo `POST`. A conexão que cai depois da
+    requisição e antes da resposta deixa você sem saber se cobrou; repetir
+    com a mesma chave resolve isso sem risco de cobrar duas vezes.
+
+    - **mesma chave, mesmo corpo** → a resposta gravada, com
+      `Idempotent-Replayed: true`. A cobrança não é recriada.
+    - **mesma chave, corpo diferente** → `409 idempotency_key_reused`.
+      Devolver a cobrança antiga faria você acreditar que cobrou o valor
+      novo.
+    - **mesma chave, primeira ainda em voo** → `409
+      idempotency_key_in_progress`. Repita em instantes.
+
+    A ordem dos campos no JSON não invalida o retry. A chave vale por 24
+    horas e é sua: dois clientes diferentes podem usar `pedido-1` sem
+    colidir.
+
+    ## Erros
+
+    Todo erro - inclusive os que não previmos - tem a mesma forma:
+
+    ```json
+    {
+      "error": {
+        "type": "invalid_request_error",
+        "code": "amount_below_minimum",
+        "message": "…",
+        "details": {}
+      }
+    }
+    ```
+
+    Trate pelo `code`, nunca pela `message`: o código é contrato, o texto
+    pode ser reescrito a qualquer momento.
 
   contact:
     name: Suporte Vext
-    email: suporte@usevext.com
+    email: suporte@vext.com.br
 
 servers:
   - url: https://api.usevext.com
@@ -90,7 +148,11 @@ paths:
                   expires_in: 1800
                   customer:
                     name: Maria Compradora
+                    email: maria@exemplo.com.br
                     document: '11144477735'
+                    document_type: CPF
+                    phone_ddd: '11'
+                    phone_number: '987654321'
                   items:
                     - code: curso-vue
                       description: Curso de Vue 3
@@ -220,7 +282,7 @@ paths:
                         pix:
                           qr_code: 00020101021226840014br.gov.bcb.pix2562qrcodepix.example.com/v2/abcd1234
                           expires_at: '2026-08-04T15:00:00+00:00'
-                          end_2_end_id: E12345678202608041200
+                          end_to_end_id: E12345678202608041200
                         created_at: '2026-08-04T14:00:00+00:00'
                         paid_at: '2026-08-04T14:03:11+00:00'
                         expired_at: null
@@ -498,7 +560,7 @@ webhooks:
                       pix:
                         qr_code: 00020101021226840014br.gov.bcb.pix2562qrcodepix.example.com/v2/abcd1234
                         expires_at: '2026-08-04T15:00:00+00:00'
-                        end_2_end_id: E12345678202608041200
+                        end_to_end_id: E12345678202608041200
                       created_at: '2026-08-04T14:00:00+00:00'
                       paid_at: '2026-08-04T14:03:11+00:00'
                       expired_at: null
@@ -564,7 +626,7 @@ webhooks:
                       pix:
                         qr_code: 00020101021226840014br.gov.bcb.pix2562qrcodepix.example.com/v2/abcd1234
                         expires_at: '2026-08-04T15:00:00+00:00'
-                        end_2_end_id: E12345678202608041200
+                        end_to_end_id: E12345678202608041200
                       created_at: '2026-08-04T14:00:00+00:00'
                       paid_at: '2026-08-04T14:03:11+00:00'
                       expired_at: null
@@ -766,34 +828,44 @@ components:
 
     Customer:
       type: object
-      required: [name]
+      required: [name, email, document, phone_ddd, phone_number]
       properties:
         name:
           type: string
           maxLength: 120
           example: João Comprador
         email:
-          type: [string, 'null']
+          type: string
           format: email
           maxLength: 180
+          description: |
+            Obrigatório: sem e-mail o provedor aceita o pedido e devolve
+            uma cobrança sem QR code.
           example: joao@exemplo.com.br
         document:
-          type: [string, 'null']
+          type: string
           maxLength: 20
           description: |
             CPF ou CNPJ. Pontuação é aceita e descartada - guardamos apenas
-            os dígitos.
+            os dígitos. Obrigatório: sem documento o provedor aceita o
+            pedido e devolve uma cobrança sem QR code.
           example: '111.444.777-35'
         document_type:
           type: [string, 'null']
           enum: [CPF, CNPJ, PASSPORT, null]
         phone_ddd:
-          type: [string, 'null']
+          type: string
           maxLength: 3
+          description: |
+            DDD de quem vai pagar. Obrigatório: sem telefone o provedor
+            aceita o pedido e devolve uma cobrança sem QR code.
           example: '11'
         phone_number:
-          type: [string, 'null']
+          type: string
           maxLength: 12
+          description: |
+            Número sem o DDD. Oito dígitos (fixo) ou nove (celular, sempre
+            começando com 9).
           example: '987654321'
 
     CustomerSummary:
@@ -956,7 +1028,7 @@ components:
             expires_at:
               type: [string, 'null']
               format: date-time
-            end_2_end_id:
+            end_to_end_id:
               type: [string, 'null']
               description: |
                 Identificador da transação no Sistema de Pagamentos
@@ -1267,7 +1339,7 @@ components:
         pix:
           qr_code: 00020101021226840014br.gov.bcb.pix2562qrcodepix.example.com/v2/abcd1234
           expires_at: '2026-08-04T15:00:00+00:00'
-          end_2_end_id: null
+          end_to_end_id: null
         created_at: '2026-08-04T14:00:00+00:00'
         paid_at: null
         expired_at: null
@@ -1294,7 +1366,7 @@ components:
         pix:
           qr_code: 00020101021226840014br.gov.bcb.pix2562qrcodepix.example.com/v2/abcd1234
           expires_at: '2026-08-04T15:00:00+00:00'
-          end_2_end_id: E12345678202608041200
+          end_to_end_id: E12345678202608041200
         created_at: '2026-08-04T14:00:00+00:00'
         paid_at: '2026-08-04T14:03:11+00:00'
         expired_at: null
