@@ -7,80 +7,21 @@ info:
   description: |
     API pública do gateway. Todo endpoint desta versão vive sob `/v1`.
 
-    ## Dinheiro é sempre CENTAVOS INTEIROS
+    Quatro regras valem para toda chamada. Cada uma tem uma página própria
+    nos guias, com exemplos nas quatro linguagens.
 
-    Não há exceção. `amount`, `platform_fee`, `net_amount`, `refunded_amount`,
-    `fee_returned`, `seller_debit`, `balance`, `available`, `reserved`, `debt`
-    e `withdrawable` são inteiros em centavos de real.
-
-    | Valor       | Envie / receba |
-    |-------------|----------------|
-    | R$ 1,00     | `100`          |
-    | R$ 10,50    | `1050`         |
-    | R$ 1.234,56 | `123456`       |
-
-    Enviar `19.99` devolve `422`. A recusa é deliberada: um decimal chega ao
-    servidor como ponto flutuante, e `19.99 * 100` dá `1998.9999999999998` -
-    truncado, vira `1998`, e o centavo perdido só aparece na conciliação do
-    mês. Diante de um decimal preferimos recusar a adivinhar a intenção -
-    com dinheiro, adivinhar sai caro. Ver
-    [Valores em centavos](/essenciais/valores-em-centavos).
-
-    ## Autenticação
-
-    Toda chamada leva a chave no header:
-
-    ```
-    Authorization: Bearer sk_live_...
-    ```
-
-    A chave é criada em **Desenvolvedores** no painel e o valor em claro
-    aparece **uma única vez**, na criação - guardamos apenas um hash
-    SHA-256. Perdeu, gere outra.
-
-    Cada chave carrega escopos (`charges:read`, `charges:write`,
-    `refunds:write`, `balance:read`). Chamar um endpoint fora do escopo
-    devolve `403`, e não `401`: a chave está certa, faltou permissão.
-
-    Chaves de teste usam o prefixo `sk_test_`. A diferença é visível a olho
-    nu de propósito - uma chave de teste colada em produção precisa ser
-    reconhecível antes de alguém passar a tarde investigando.
-
-    ## Idempotência
-
-    Envie `Idempotency-Key` em todo `POST`. A conexão que cai depois da
-    requisição e antes da resposta deixa você sem saber se cobrou; repetir
-    com a mesma chave resolve isso sem risco de cobrar duas vezes.
-
-    - **mesma chave, mesmo corpo** → a resposta gravada, com
-      `Idempotent-Replayed: true`. A cobrança não é recriada.
-    - **mesma chave, corpo diferente** → `409 idempotency_key_reused`.
-      Devolver a cobrança antiga faria você acreditar que cobrou o valor
-      novo.
-    - **mesma chave, primeira ainda em voo** → `409
-      idempotency_key_in_progress`. Repita em instantes.
-
-    A ordem dos campos no JSON não invalida o retry. A chave vale por 24
-    horas e é sua: dois clientes diferentes podem usar `pedido-1` sem
-    colidir.
-
-    ## Erros
-
-    Todo erro - inclusive os que não previmos - tem a mesma forma:
-
-    ```json
-    {
-      "error": {
-        "type": "invalid_request_error",
-        "code": "amount_below_minimum",
-        "message": "…",
-        "details": {}
-      }
-    }
-    ```
-
-    Trate pelo `code`, nunca pela `message`: o código é contrato, o texto
-    pode ser reescrito a qualquer momento.
+    - **Dinheiro é sempre centavos inteiros.** R$ 100,00 se envia como
+      `10000`; um decimal devolve `422`. Ver
+      [Valores em centavos](/essenciais/valores-em-centavos).
+    - **A chave secreta vai no header e fica no servidor.** Cada chave
+      carrega escopos; fora do escopo devolve `403`, e não `401`. Ver
+      [Autenticação](/essenciais/autenticacao).
+    - **Envie `Idempotency-Key` em todo `POST`.** Repetir com a mesma chave
+      devolve a resposta gravada em vez de criar um segundo recurso. Ver
+      [Idempotência](/essenciais/idempotencia).
+    - **Trate os erros pelo `code`**, nunca pela `message` - o código é
+      contrato, o texto pode ser reescrito a qualquer momento. Ver
+      [Erros](/essenciais/erros).
 
   contact:
     name: Suporte Vext
