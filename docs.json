@@ -111,7 +111,7 @@
     "links": [
       {
         "label": "Suporte",
-        "href": "mailto:suporte@usevext.com"
+        "href": "https://wa.me/5511936185272"
       }
     ]
   },
@@ -128,7 +128,7 @@
       {
         "header": "Vext",
         "items": [
-          { "label": "Suporte", "href": "mailto:suporte@usevext.com" }
+          { "label": "Suporte", "href": "https://wa.me/5511936185272" }
         ]
       }
     ]
