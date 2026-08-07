@@ -19,11 +19,12 @@ info:
     | R$ 10,50    | `1050`         |
     | R$ 1.234,56 | `123456`       |
 
-    Enviar `10.50` devolve `422`. A recusa é deliberada: `10.50` chega ao
-    servidor como ponto flutuante, `10.50 * 100` não é exatamente `1050` em
-    binário, e o centavo perdido só aparece na conciliação do mês. Diante de
-    um decimal preferimos recusar a adivinhar a intenção - com dinheiro,
-    adivinhar sai caro.
+    Enviar `19.99` devolve `422`. A recusa é deliberada: um decimal chega ao
+    servidor como ponto flutuante, e `19.99 * 100` dá `1998.9999999999998` -
+    truncado, vira `1998`, e o centavo perdido só aparece na conciliação do
+    mês. Diante de um decimal preferimos recusar a adivinhar a intenção -
+    com dinheiro, adivinhar sai caro. Ver
+    [Valores em centavos](/essenciais/valores-em-centavos).
 
     ## Autenticação
 
