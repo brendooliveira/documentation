@@ -1,24 +1,32 @@
 ---
 title: "Ciclo de vida da cobrança"
 sidebarTitle: "Ciclo de vida"
-description: "Os sete estados de uma cobrança PIX, quais são terminais e qual ainda admite estorno."
+description: "Os dez estados de uma cobrança, quais são terminais e qual ainda admite estorno."
 icon: "workflow"
 ---
 
 import TabelaStatusCobranca from "/snippets/tabela-status-cobranca.mdx";
 import Suporte from "/snippets/suporte.mdx";
 
-Uma cobrança nasce `pending` e caminha para um estado do qual não volta.
+Uma cobrança caminha para um estado do qual não volta. Onde ela começa depende do meio de pagamento:
+o PIX nasce `pending`, o cartão nasce `processing`.
 
 ```mermaid
 stateDiagram-v2
-    [*] --> pending: POST /v1/charges
+    [*] --> pending: POST /v1/charges (PIX)
+    [*] --> processing: venda no cartão
     pending --> paid: PIX confirmado
     pending --> expired: expires_in vencido
     pending --> canceled: cancelada
     pending --> failed: falha no provedor
+    processing --> in_analysis: retida pela análise de fraude
+    processing --> paid: autorizada
+    processing --> failed: recusada pela operadora
+    in_analysis --> paid: aprovada na revisão
+    in_analysis --> failed: reprovada na revisão
     paid --> partially_refunded: estorno parcial
     paid --> refunded: estorno integral
+    paid --> chargedback: compra contestada
     partially_refunded --> partially_refunded: outro estorno parcial
     partially_refunded --> refunded: estorno do que restava
     paid --> [*]
@@ -26,9 +34,23 @@ stateDiagram-v2
     expired --> [*]
     canceled --> [*]
     failed --> [*]
+    chargedback --> [*]
 ```
 
 <TabelaStatusCobranca />
+
+## Só três estados ainda mudam sozinhos
+
+`pending`, `processing` e `in_analysis` são os estados de trânsito: a cobrança ainda vai se mexer
+sem que ninguém peça. Os demais são terminais, com a exceção de `paid` e `partially_refunded`, que
+seguem admitindo estorno.
+
+`processing` e `in_analysis` são do cartão. A autorização é decidida na mesma requisição, mas pode
+parar na análise de fraude antes de virar `paid` ou `failed` — e a revisão leva horas. No PIX não há
+etapa intermediária: a cobrança vai direto de `pending` para o desfecho.
+
+`in_analysis` não é um `paid` mais lento: a revisão pode terminar em recusa. O desfecho chega como
+`charge.paid` ou `charge.failed`, e é nele que você age.
 
 ## `partially_refunded` é estado próprio
 
@@ -37,6 +59,16 @@ Uma venda devolvida pela metade fica `partially_refunded`, e não `refunded`.
 A distinção existe porque tratar as duas como a mesma coisa faria o seu relatório descontar o valor
 inteiro de uma venda que só voltou pela metade. O quanto voltou está em `refunded_amount`, acumulado
 entre estornos parciais; o que ainda cabe estornar é `amount - refunded_amount`.
+
+## `chargedback` é o fim da linha
+
+O portador contestou a compra na operadora e a bandeira levou o valor de volta. A cobrança fica
+`chargedback` e não admite mais cancelamento nem estorno — não há o que devolver, o dinheiro já
+saiu.
+
+O débito no saldo do vendedor já aconteceu quando o evento chega, e vem descrito num objeto `refund`,
+do mesmo jeito que num estorno. Se você já entregou o produto, é aqui que revoga o acesso. O aviso
+chega como [`charge.chargedback`](/api-reference/webhooks/charge-chargedback).
 
 ## Expiração
 
@@ -57,8 +89,9 @@ Uma cobrança `expired` não pode ser paga nem estornada. Para tentar de novo, c
 ## Em qual estado agir
 
 <Warning>
-  O momento de liberar o produto é o `charge.paid`, não a resposta de `POST /v1/charges`. A criação
-  devolve `pending` — o QR já existe, mas o pagamento ainda não aconteceu.
+  O momento de liberar o produto é o `charge.paid`, e nenhum outro. A criação devolve `pending` — o
+  QR já existe, mas o pagamento ainda não aconteceu. E `in_analysis` é uma compra sob suspeita, que
+  ainda pode ser recusada.
 </Warning>
 
 As datas contam a história e vêm `null` até acontecerem: `created_at`, `paid_at`, `expired_at`,

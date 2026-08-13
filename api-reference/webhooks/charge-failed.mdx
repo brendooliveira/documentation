@@ -1,0 +1,17 @@
+---
+title: "charge.failed"
+description: "Enviado quando a operadora do cartão recusa o pagamento, ou quando a análise de fraude o reprova."
+icon: "circle-x"
+openapi: "/api-reference/openapi.yaml webhook charge.failed"
+---
+
+<Warning>
+  **Confira a assinatura antes de agir.** Ver [Verificar a assinatura](/webhooks/assinatura).
+</Warning>
+
+A cobrança está encerrada: não há retentativa automática. Para tentar de novo, o comprador precisa
+passar por um novo pagamento.
+
+`failure_reason` traz o que a operadora respondeu, e o lugar dele é o **seu log**, não a tela do
+comprador. "Cartão sem limite" dito ao portador de um cartão clonado é informação que ajuda quem
+clonou.

@@ -99,7 +99,10 @@
             "group": "Eventos de webhook",
             "pages": [
               "api-reference/webhooks/charge-paid",
+              "api-reference/webhooks/charge-failed",
+              "api-reference/webhooks/charge-in-analysis",
               "api-reference/webhooks/charge-refunded",
+              "api-reference/webhooks/charge-chargedback",
               "api-reference/webhooks/withdrawal-paid"
             ]
           }

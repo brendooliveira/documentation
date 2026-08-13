@@ -93,6 +93,23 @@ Cada tentativa tem um `X-Vext-Delivery`. É por ele que localizamos a tentativa,
 servidor e o horário. Registre-o em log mesmo quando tudo dá certo: quando algo der errado, ele é a
 diferença entre um chamado de cinco minutos e uma tarde de investigação.
 
+## O corpo pode chegar reduzido
+
+Escreva o handler para tolerar um `charge` com menos campos do que o normal, e ele sobrevive ao dia
+ruim. Quando a montagem do corpo completo falha do nosso lado, o evento sai numa versão reduzida em
+vez de não sair — um `charge.paid` menor ainda avisa que a venda foi paga, e nenhum evento deixaria
+você sem saber.
+
+O corpo reduzido mantém o essencial para você reencontrar o pedido, `metadata` inclusive. O restante
+está em [`GET /v1/charges/{code}`](/api-reference/cobrancas/consultar), e é de lá que você completa.
+O schema `ChargeMinimal` na spec diz exatamente o que vem.
+
+<Note>
+  É um caminho de exceção, não o normal. Ele importa porque um handler escrito contra o corpo cheio
+  quebraria justamente quando algo já deu errado — e o evento perdido seria um pagamento que o seu
+  sistema nunca registrou.
+</Note>
+
 ## O que não é entregue
 
 Os estados intermediários de saque (`processing`, `pending`) não geram evento. Eles não pedem ação

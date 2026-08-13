@@ -71,6 +71,9 @@ paths:
                   amount: 10000
                   description: Curso de Vue 3
                   reference: pedido-1042
+                  metadata:
+                    carrinho: cart_88f21
+                    campanha: black-friday
                   customer:
                     name: João Comprador
                     email: joao@exemplo.com.br
@@ -90,11 +93,7 @@ paths:
                   expires_in: 1800
                   customer:
                     name: Maria Compradora
-                    email: maria@exemplo.com.br
                     document: '11144477735'
-                    document_type: CPF
-                    phone_ddd: '11'
-                    phone_number: '987654321'
                   items:
                     - code: curso-vue
                       description: Curso de Vue 3
@@ -217,6 +216,9 @@ paths:
                         refunded_amount: 0
                         description: Curso de Vue 3
                         reference: pedido-1042
+                        metadata:
+                          carrinho: cart_88f21
+                          campanha: black-friday
                         customer:
                           name: João Comprador
                           email: joao@exemplo.com.br
@@ -460,8 +462,9 @@ webhooks:
       summary: Cobrança paga
       operationId: webhookChargePaid
       description: |
-        Enviado quando o PIX é confirmado. É o evento sobre o qual o seu
-        sistema deve agir - liberar acesso, faturar, dar baixa no pedido.
+        Enviado quando o pagamento é confirmado, no PIX ou no cartão. É o
+        evento sobre o qual o seu sistema deve agir - liberar acesso,
+        faturar, dar baixa no pedido.
 
         **Confira a assinatura antes de agir.** Quem tem o segredo consegue
         forjar este evento, e um sistema que libera produto ao recebê-lo
@@ -495,6 +498,9 @@ webhooks:
                       refunded_amount: 0
                       description: Curso de Vue 3
                       reference: pedido-1042
+                      metadata:
+                        carrinho: cart_88f21
+                        campanha: black-friday
                       customer:
                         name: João Comprador
                         email: joao@exemplo.com.br
@@ -517,6 +523,93 @@ webhooks:
         default:
           description: |
             Qualquer resposta fora da faixa 2xx agenda nova tentativa.
+
+  charge.failed:
+    post:
+      summary: Cobrança recusada
+      operationId: webhookChargeFailed
+      description: |
+        Enviado quando a operadora do cartão recusa o pagamento, ou quando a
+        análise de fraude o reprova. A cobrança está encerrada: não há
+        retentativa automática, e `failure_reason` traz o que a operadora
+        respondeu.
+
+        O texto vem da adquirente e serve para o SEU log, não para a tela do
+        comprador - "cartão sem limite" dito ao portador de um cartão
+        clonado é informação que ajuda quem clonou.
+      parameters:
+        - $ref: '#/components/parameters/SignatureHeader'
+        - $ref: '#/components/parameters/EventHeader'
+        - $ref: '#/components/parameters/DeliveryHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChargePaidEvent'
+            examples:
+              recusada:
+                value:
+                  id: evt_01k1y6r7z2m4n6p8q0r2s4t6ua
+                  type: charge.failed
+                  created_at: '2026-08-04T14:03:12+00:00'
+                  data:
+                    charge:
+                      object: charge
+                      id: ch_01k1y6r6m6q2x0p3d9v4t7c8n2
+                      status: failed
+                      payment_method: credit_card
+                      amount: 12775
+                      currency: BRL
+                      description: Curso de Vue 3
+                      created_at: '2026-08-04T14:00:00+00:00'
+      responses:
+        '200':
+          description: Recebido.
+        default:
+          description: Fora da faixa 2xx, agenda nova tentativa.
+
+  charge.in_analysis:
+    post:
+      summary: Cobrança em análise
+      operationId: webhookChargeInAnalysis
+      description: |
+        Enviado quando a análise de fraude segura um pagamento no cartão
+        para revisão manual.
+
+        **Não libere a entrega ainda.** A revisão leva horas e pode terminar
+        em recusa; o desfecho chega como `charge.paid` ou `charge.failed`.
+      parameters:
+        - $ref: '#/components/parameters/SignatureHeader'
+        - $ref: '#/components/parameters/EventHeader'
+        - $ref: '#/components/parameters/DeliveryHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChargePaidEvent'
+            examples:
+              em_analise:
+                value:
+                  id: evt_01k1y6r7z2m4n6p8q0r2s4t6ub
+                  type: charge.in_analysis
+                  created_at: '2026-08-04T14:03:12+00:00'
+                  data:
+                    charge:
+                      object: charge
+                      id: ch_01k1y6r6m6q2x0p3d9v4t7c8n2
+                      status: in_analysis
+                      payment_method: credit_card
+                      amount: 12775
+                      currency: BRL
+                      description: Curso de Vue 3
+                      created_at: '2026-08-04T14:00:00+00:00'
+      responses:
+        '200':
+          description: Recebido.
+        default:
+          description: Fora da faixa 2xx, agenda nova tentativa.
 
   charge.refunded:
     post:
@@ -561,6 +654,9 @@ webhooks:
                       refunded_amount: 4000
                       description: Curso de Vue 3
                       reference: pedido-1042
+                      metadata:
+                        carrinho: cart_88f21
+                        campanha: black-friday
                       customer:
                         name: João Comprador
                         email: joao@exemplo.com.br
@@ -583,6 +679,60 @@ webhooks:
                       seller_debit: 3720
                       reason: Devolução de um item
                       created_at: '2026-08-05T10:12:00+00:00'
+      responses:
+        '200':
+          description: Recebido.
+        default:
+          description: Fora da faixa 2xx, agenda nova tentativa.
+
+  charge.chargedback:
+    post:
+      summary: Cobrança contestada
+      operationId: webhookChargeChargedback
+      description: |
+        Enviado quando o portador contesta a compra na operadora do cartão e
+        o valor é levado de volta pela bandeira.
+
+        É definitivo: a cobrança fica `chargedback` e não admite mais
+        cancelamento nem estorno. O valor já foi debitado do saldo do
+        vendedor - o objeto `refund` descreve o débito, do mesmo jeito que
+        num estorno.
+
+        Se você já entregou, é aqui que revoga.
+      parameters:
+        - $ref: '#/components/parameters/SignatureHeader'
+        - $ref: '#/components/parameters/EventHeader'
+        - $ref: '#/components/parameters/DeliveryHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChargeRefundedEvent'
+            examples:
+              contestada:
+                value:
+                  id: evt_01k1y6r7z2m4n6p8q0r2s4t6uc
+                  type: charge.chargedback
+                  created_at: '2026-08-20T09:41:00+00:00'
+                  data:
+                    charge:
+                      object: charge
+                      id: ch_01k1y6r6m6q2x0p3d9v4t7c8n2
+                      status: chargedback
+                      payment_method: credit_card
+                      amount: 12775
+                      currency: BRL
+                      refunded_amount: 12775
+                      created_at: '2026-08-04T14:00:00+00:00'
+                    refund:
+                      object: refund
+                      id: rf_01k1y7c4a1b2c3d4e5f6g7h8i9
+                      status: succeeded
+                      amount: 12775
+                      currency: BRL
+                      reason: chargeback
+                      created_at: '2026-08-20T09:41:00+00:00'
       responses:
         '200':
           description: Recebido.
@@ -736,28 +886,43 @@ components:
     ChargeStatus:
       type: string
       description: |
-        Situação da cobrança. Todos os estados exceto `pending` são
-        terminais - exceto os que ainda admitem estorno.
+        Situação da cobrança. Só os estados de trânsito - `pending`,
+        `processing` e `in_analysis` - ainda mudam sozinhos; os demais são
+        terminais, exceto os que ainda admitem estorno.
+
+        `processing` e `in_analysis` são do cartão: a autorização é
+        decidida na mesma requisição, mas pode parar na análise de fraude
+        antes de virar `paid` ou `failed`. No PIX a cobrança vai direto de
+        `pending` para o desfecho.
 
         `partially_refunded` é estado próprio, e não um `refunded` com
         asterisco: tratar uma venda devolvida pela metade como estornada
         faria seu relatório descontar o valor inteiro.
+
+        `chargedback` é definitivo: o dinheiro voltou pelo caminho da
+        bandeira, e nem cancelamento nem estorno são mais possíveis.
       enum:
         - pending
+        - processing
+        - in_analysis
         - paid
         - expired
         - canceled
         - partially_refunded
         - refunded
         - failed
+        - chargedback
       x-labels:
         pending: Aguardando pagamento
+        processing: Processando
+        in_analysis: Em análise
         paid: Pago
         expired: Expirado
         canceled: Cancelado
         partially_refunded: Estornado em parte
         refunded: Estornado
         failed: Falhou
+        chargedback: Chargeback
 
     RefundStatus:
       type: string
@@ -813,6 +978,7 @@ components:
     CustomerSummary:
       type: object
       description: O comprador, como devolvemos.
+      required: [name, email, document]
       properties:
         name:
           type: [string, 'null']
@@ -870,6 +1036,26 @@ components:
             e nos webhooks, e serve de filtro em `GET /v1/charges` - é o que
             permite casar a cobrança com o seu pedido sem guardar o nosso
             `id`.
+        metadata:
+          type: [object, 'null']
+          maxProperties: 20
+          additionalProperties:
+            type: string
+            maxLength: 500
+          propertyNames:
+            maxLength: 40
+          description: |
+            Até **20** pares de chave/valor seus, devolvidos na consulta e
+            nos webhooks. É o `reference` para quem precisa de mais de um
+            rótulo - com uma diferença: `reference` filtra a listagem,
+            `metadata` não.
+
+            **Os valores devem ser strings.** Um número aqui é recusado com
+            `422`: `{"total": 10.10}` voltaria como `10.1`, e a formatação
+            do seu dado é sua. Envie `{"total": "10.10"}`.
+          example:
+            carrinho: cart_88f21
+            campanha: black-friday
         expires_in:
           type: [integer, 'null']
           minimum: 60
@@ -905,6 +1091,13 @@ components:
 
     Charge:
       type: object
+      description: |
+        Uma cobrança, como a API a devolve. **Todo campo desta lista está
+        sempre presente** - os anuláveis vêm com `null`, nunca ausentes.
+        Marcar como opcional o que nunca falta obrigaria você a testar a
+        existência de uma chave que sempre existe.
+
+        Nos webhooks há uma exceção documentada: veja `ChargeMinimal`.
       required:
         - object
         - id
@@ -912,6 +1105,18 @@ components:
         - payment_method
         - amount
         - currency
+        - platform_fee
+        - net_amount
+        - refunded_amount
+        - description
+        - reference
+        - metadata
+        - customer
+        - pix
+        - created_at
+        - paid_at
+        - expired_at
+        - refunded_at
       properties:
         object:
           type: string
@@ -927,7 +1132,12 @@ components:
           $ref: '#/components/schemas/ChargeStatus'
         payment_method:
           type: string
-          enum: [pix]
+          enum: [pix, credit_card]
+          description: |
+            `POST /v1/charges` só cria PIX, então toda cobrança criada por
+            esta API nasce `pix`. `credit_card` aparece nos **webhooks** e
+            no `GET`: as vendas de cartão feitas pelo checkout ou por link
+            de pagamento são suas também, e chegam pelos mesmos eventos.
         amount:
           allOf:
             - $ref: '#/components/schemas/Cents'
@@ -957,10 +1167,31 @@ components:
           type: [string, 'null']
         reference:
           type: [string, 'null']
+        metadata:
+          type: object
+          additionalProperties:
+            type: string
+          description: |
+            O que você enviou na criação. **Sempre um objeto**, `{}` quando
+            não houve nada - nunca `null`, para o seu código não ter dois
+            casos a tratar.
+          example:
+            carrinho: cart_88f21
+            campanha: black-friday
         customer:
-          $ref: '#/components/schemas/CustomerSummary'
+          oneOf:
+            - $ref: '#/components/schemas/CustomerSummary'
+            - type: 'null'
+          description: |
+            `null` na cobrança que não tem comprador vinculado. A chave em
+            si nunca falta.
         pix:
           type: object
+          description: |
+            Presente em toda cobrança, inclusive nas de cartão - onde os
+            três campos vêm `null`. Um objeto sempre presente evita o
+            `if (charge.pix)` antes de cada leitura.
+          required: [qr_code, expires_at, end_to_end_id]
           properties:
             qr_code:
               type: [string, 'null']
@@ -989,9 +1220,72 @@ components:
           type: [string, 'null']
           format: date-time
 
+    ChargeMinimal:
+      type: object
+      description: |
+        A cobrança em versão reduzida, que só aparece em **webhooks**.
+
+        Quando a montagem do corpo completo falha do nosso lado, o evento
+        sai assim em vez de não sair: um `charge.paid` menor ainda avisa que
+        a venda foi paga, e nenhum evento deixaria você sem saber. É um
+        caminho de exceção, não o normal - mas ele existe, e um cliente
+        escrito contra o schema cheio quebraria justamente no dia ruim.
+
+        Quando isso acontece, busque o restante em `GET /v1/charges/{code}`.
+      required: [object, id, status, payment_method, amount, currency, metadata]
+      properties:
+        object:
+          type: string
+          const: charge
+        id:
+          type: string
+          example: ch_01k1y6r6m6q2x0p3d9v4t7c8n2
+        status:
+          $ref: '#/components/schemas/ChargeStatus'
+        payment_method:
+          type: string
+          enum: [pix, credit_card]
+        amount:
+          allOf:
+            - $ref: '#/components/schemas/Cents'
+          description: Valor cobrado, em centavos inteiros.
+        currency:
+          type: string
+          const: BRL
+        metadata:
+          type: object
+          additionalProperties:
+            type: string
+          description: |
+            Vai até no corpo reduzido: é por ela que você reencontra o
+            pedido do seu lado, e um evento sem ela anunciaria um pagamento
+            sem dizer a que se refere.
+
+    WebhookCharge:
+      description: |
+        A cobrança dentro de um evento. Quase sempre o objeto `Charge`
+        completo; `ChargeMinimal` no caminho degradado descrito nele.
+      anyOf:
+        - $ref: '#/components/schemas/Charge'
+        - $ref: '#/components/schemas/ChargeMinimal'
+
     Refund:
       type: object
-      required: [object, id, status, amount, currency]
+      description: |
+        Um estorno. `charge`, `failed_reason` e `processed_at` são os
+        únicos campos que podem faltar: os três vêm na resposta da API, mas
+        o objeto embutido nos webhooks `charge.refunded` e
+        `charge.chargedback` não os inclui.
+      required:
+        - object
+        - id
+        - status
+        - amount
+        - currency
+        - fee_returned
+        - seller_debit
+        - reason
+        - created_at
       properties:
         object:
           type: string
@@ -1041,7 +1335,18 @@ components:
 
     Balance:
       type: object
-      required: [object, currency, balance, available, reserved, debt]
+      required:
+        - object
+        - currency
+        - balance
+        - available
+        - reserved
+        - debt
+        # Anuláveis, e ainda assim sempre presentes: `null` aqui quer dizer
+        # "a consulta ao provedor falhou", que é diferente de zero e
+        # diferente de ausente.
+        - withdrawable
+        - provider
       properties:
         object:
           type: string
@@ -1180,7 +1485,13 @@ components:
           example: evt_01k1y6r7z2m4n6p8q0r2s4t6u8
         type:
           type: string
-          enum: [charge.paid, charge.refunded, withdrawal.paid]
+          enum:
+            - charge.paid
+            - charge.failed
+            - charge.in_analysis
+            - charge.refunded
+            - charge.chargedback
+            - withdrawal.paid
         created_at:
           type: string
           format: date-time
@@ -1195,7 +1506,7 @@ components:
               required: [charge]
               properties:
                 charge:
-                  $ref: '#/components/schemas/Charge'
+                  $ref: '#/components/schemas/WebhookCharge'
 
     ChargeRefundedEvent:
       allOf:
@@ -1207,7 +1518,7 @@ components:
               required: [charge, refund]
               properties:
                 charge:
-                  $ref: '#/components/schemas/Charge'
+                  $ref: '#/components/schemas/WebhookCharge'
                 refund:
                   $ref: '#/components/schemas/Refund'
 
@@ -1222,7 +1533,16 @@ components:
               properties:
                 withdrawal:
                   type: object
-                  required: [object, id, status, amount, currency]
+                  required:
+                    - object
+                    - id
+                    - status
+                    - amount
+                    - currency
+                    - fee
+                    - net_amount
+                    - requested_at
+                    - processed_at
                   properties:
                     object:
                       type: string
@@ -1274,6 +1594,9 @@ components:
         refunded_amount: 0
         description: Curso de Vue 3
         reference: pedido-1042
+        metadata:
+          carrinho: cart_88f21
+          campanha: black-friday
         customer:
           name: João Comprador
           email: joao@exemplo.com.br
@@ -1301,6 +1624,9 @@ components:
         refunded_amount: 0
         description: Curso de Vue 3
         reference: pedido-1042
+        metadata:
+          carrinho: cart_88f21
+          campanha: black-friday
         customer:
           name: João Comprador
           email: joao@exemplo.com.br

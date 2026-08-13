@@ -1,0 +1,18 @@
+---
+title: "charge.in_analysis"
+description: "Enviado quando a análise de fraude segura um pagamento no cartão para revisão manual."
+icon: "search"
+openapi: "/api-reference/openapi.yaml webhook charge.in_analysis"
+---
+
+<Warning>
+  **Não libere a entrega ainda.** A revisão leva horas e pode terminar em recusa. Liberar aqui é
+  entregar produto numa compra que a análise de fraude já suspeitou.
+</Warning>
+
+Este evento é um aviso de espera, não um desfecho. O resultado chega depois, como
+[`charge.paid`](/api-reference/webhooks/charge-paid) ou
+[`charge.failed`](/api-reference/webhooks/charge-failed) — e é nele que o seu sistema age.
+
+Confira a assinatura antes de gravar qualquer coisa. Ver
+[Verificar a assinatura](/webhooks/assinatura).

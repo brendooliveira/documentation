@@ -1,0 +1,17 @@
+---
+title: "charge.chargedback"
+description: "Enviado quando o portador contesta a compra na operadora e a bandeira leva o valor de volta."
+icon: "gavel"
+openapi: "/api-reference/openapi.yaml webhook charge.chargedback"
+---
+
+<Warning>
+  **Confira a assinatura antes de agir.** Ver [Verificar a assinatura](/webhooks/assinatura).
+</Warning>
+
+Se você já entregou, é aqui que revoga o acesso: o dinheiro dessa venda não volta.
+
+A cobrança fica `chargedback` e não admite mais cancelamento nem estorno. O valor já foi debitado do
+saldo do vendedor quando o evento chega, e o objeto `refund` descreve esse débito — do mesmo jeito
+que num estorno, para o seu código ler os dois pelo mesmo caminho. Ver
+[Ciclo de vida](/essenciais/ciclo-de-vida-da-cobranca).

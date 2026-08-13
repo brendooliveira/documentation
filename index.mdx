@@ -18,7 +18,7 @@ cobrança, mostra o QR ao comprador, e nós avisamos quando o dinheiro entra.
     As cinco operações, com playground.
   </Card>
   <Card title="Webhooks" icon="webhook" href="/webhooks/visao-geral">
-    Os três eventos e como conferir a assinatura.
+    Os seis eventos e como conferir a assinatura.
   </Card>
   <Card title="Receitas" icon="route" href="/receitas/checkout-pix">
     Fluxos completos, do checkout à conciliação.
@@ -76,21 +76,28 @@ documentação fica previsível — e você evita os quatro tropeços mais comun
 | [Estornar cobrança](/api-reference/cobrancas/estornar) | `POST /v1/charges/{code}/refund` |
 | [Consultar saldo](/api-reference/saldo/consultar) | `GET /v1/balance` |
 
-**Três eventos**, que nós enviamos para o seu sistema:
+**Seis eventos**, que nós enviamos para o seu sistema:
 
 | Evento | Quando dispara |
 | --- | --- |
-| [`charge.paid`](/api-reference/webhooks/charge-paid) | O PIX é confirmado |
+| [`charge.paid`](/api-reference/webhooks/charge-paid) | O pagamento é confirmado, no PIX ou no cartão |
+| [`charge.failed`](/api-reference/webhooks/charge-failed) | A operadora do cartão recusa o pagamento |
+| [`charge.in_analysis`](/api-reference/webhooks/charge-in-analysis) | A análise de fraude segura um pagamento no cartão |
 | [`charge.refunded`](/api-reference/webhooks/charge-refunded) | Um estorno é concluído |
+| [`charge.chargedback`](/api-reference/webhooks/charge-chargedback) | O portador contesta a compra na operadora |
 | [`withdrawal.paid`](/api-reference/webhooks/withdrawal-paid) | O saque cai na conta do vendedor |
 
-## Três coisas que vale saber de antemão
+## Quatro coisas que vale saber de antemão
 
 Para você não procurar o que não existe:
 
 - **A imagem do QR você gera.** Devolvemos o payload copia-e-cola em `pix.qr_code`, e qualquer
   biblioteca de QR o transforma em imagem em milissegundos. Assim as respostas ficam leves e você
   controla tamanho, cor e formato.
+- **A API cria PIX; o cartão chega pelos mesmos eventos.** `POST /v1/charges` só cria cobrança PIX,
+  então toda cobrança que nasce daqui vem `payment_method: pix`. As vendas de cartão feitas pelo
+  checkout ou por link de pagamento são suas também, e aparecem em `GET /v1/charges` e nos webhooks
+  com `payment_method: credit_card`.
 - **O saque é pedido pelo painel.** A API não tem endpoint para isso, mas avisa quando o dinheiro
   cai, pelo evento `withdrawal.paid`.
 - **Cada chave enxerga só a própria conta.** A lista devolve apenas as cobranças do vendedor dono da

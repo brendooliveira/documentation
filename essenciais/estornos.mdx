@@ -80,7 +80,7 @@ quando o total devolvido alcança o valor da venda.
 
 | `code` | Por quê |
 | --- | --- |
-| `charge_not_refundable` | A cobrança não está paga. Uma venda aguardando pagamento não tem o que devolver |
+| `charge_not_refundable` | A cobrança não está paga, ou já foi levada por um chargeback. Uma venda aguardando pagamento não tem o que devolver; uma `chargedback` já devolveu |
 | `exceeds_remaining` | Você pediu mais do que ainda cabe estornar |
 | `refund_window_closed` | Passaram-se 90 dias **do pagamento** |
 | `refund_disabled` | Estorno não habilitado para a conta. Fale com o suporte |
@@ -95,6 +95,17 @@ está em `failed_reason`.
 
 A linha permanece de propósito: uma tentativa de devolver dinheiro que não deu certo é exatamente o
 que alguém vai procurar depois — no atendimento ao comprador que ligou perguntando pelo estorno.
+
+## Chargeback também vira um `refund`
+
+Quando o portador contesta a compra na operadora, a bandeira leva o valor de volta e nós registramos
+o débito num objeto `refund` — o mesmo formato de um estorno que você pediu. Assim o seu código lê
+os dois pelo mesmo caminho, em vez de manter duas leituras para o mesmo fato contábil.
+
+A diferença está no que você pode fazer depois: nenhuma. A cobrança fica `chargedback`, e pedir
+estorno sobre ela devolve `422 charge_not_refundable`. O aviso chega como
+[`charge.chargedback`](/api-reference/webhooks/charge-chargedback), e é nele que você revoga o que
+já entregou.
 
 ## Veja também
 

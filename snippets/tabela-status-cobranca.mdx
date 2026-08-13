@@ -1,9 +1,12 @@
 | `status` | Rótulo | Terminal? | Admite estorno? |
 | --- | --- | --- | --- |
 | `pending` | Aguardando pagamento | Não | Não |
+| `processing` | Processando | Não | Não |
+| `in_analysis` | Em análise | Não | Não |
 | `paid` | Pago | Sim | Sim |
 | `partially_refunded` | Estornado em parte | Não | Sim, o que ainda resta |
 | `refunded` | Estornado | Sim | Não |
 | `expired` | Expirado | Sim | Não |
 | `canceled` | Cancelado | Sim | Não |
 | `failed` | Falhou | Sim | Não |
+| `chargedback` | Chargeback | Sim | Não |
