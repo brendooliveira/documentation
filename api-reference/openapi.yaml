@@ -74,6 +74,7 @@ paths:
                   metadata:
                     carrinho: cart_88f21
                     campanha: black-friday
+                  customer_ip: 189.45.12.7
                   customer:
                     name: João Comprador
                     email: joao@exemplo.com.br
@@ -1064,6 +1065,20 @@ components:
           description: |
             Validade do QR, em segundos. O piso de 60s evita uma cobrança
             que expira antes de o comprador abrir o aplicativo do banco.
+        customer_ip:
+          type: [string, 'null']
+          description: |
+            O IP do **comprador**, em IPv4 ou IPv6.
+
+            Numa integração servidor-a-servidor quem abre a conexão conosco
+            é o seu servidor. Sem este campo é o endereço **dele** que
+            guardamos, e o "Local" da venda no painel apontaria para o seu
+            datacenter em toda cobrança. Mande o IP de quem está comprando
+            e o dado passa a valer numa contestação.
+
+            Fica fora de `customer` porque é da tentativa, não do cadastro:
+            muda a cada compra da mesma pessoa.
+          example: 189.45.12.7
         customer:
           $ref: '#/components/schemas/Customer'
         items:

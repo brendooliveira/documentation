@@ -20,6 +20,11 @@ aba.
 Gere a `Idempotency-Key` **antes** da chamada e grave-a junto do pedido. Envie `reference` com o seu
 identificador — é o que permite reencontrar a cobrança depois sem guardar o `id` que devolvemos.
 
+Mande também `customer_ip`, o IP de quem está comprando. Quem abre a conexão conosco é o seu
+servidor; sem esse campo é o endereço **dele** que fica gravado, e o "Local" da venda apontaria para
+o seu datacenter em toda cobrança. Se a sua aplicação fica atrás de CDN ou proxy, leia o IP do
+cabeçalho encaminhado, e não do socket — senão você envia o IP do proxy com a mesma confiança.
+
 <CodeGroup>
 
 ```php PHP
@@ -32,6 +37,7 @@ $resposta = Http::withToken(config('services.vext.key'))
         'description' => $pedido->descricao,
         'reference' => "pedido-{$pedido->id}",
         'expires_in' => 1800,
+        'customer_ip' => $request->ip(),          // do comprador, não do seu servidor
         'customer' => [
             'name' => $pedido->cliente->nome,
             'email' => $pedido->cliente->email,
@@ -62,6 +68,7 @@ const resposta = await fetch('https://api.usevext.com/v1/charges', {
     description: pedido.descricao,
     reference: `pedido-${pedido.id}`,
     expires_in: 1800,
+    customer_ip: req.ip, // do comprador, não do seu servidor
     customer: {
       name: pedido.cliente.nome,
       email: pedido.cliente.email,
@@ -92,6 +99,7 @@ resposta = requests.post(
         "description": pedido.descricao,
         "reference": f"pedido-{pedido.id}",
         "expires_in": 1800,
+        "customer_ip": request.META["REMOTE_ADDR"],  # do comprador, não do seu servidor
         "customer": {
             "name": pedido.cliente.nome,
             "email": pedido.cliente.email,
