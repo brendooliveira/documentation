@@ -97,6 +97,14 @@ tags:
     description: Criação, consulta e estorno de cobranças PIX.
   - name: Saldo
     description: Quanto o vendedor tem e quanto pode sacar.
+  - name: Eventos de cobrança
+    description: O que chamamos no seu endpoint quando uma venda muda de estado.
+  - name: Eventos de saque
+    description: O que chamamos no seu endpoint quando o dinheiro sai para o vendedor.
+  - name: Eventos de contestação (MED)
+    description: |
+      Abertura e desfecho de uma contestação de Pix. Veja
+      [Visão geral dos webhooks](/webhooks/visao-geral).
 
 paths:
   /v1/charges:
@@ -271,7 +279,7 @@ paths:
                         amount: 10000
                         currency: BRL
                         platform_fee: 798
-                        net_amount: 9202
+                        net_amount: 9103
                         refunded_amount: 0
                         description: Curso de Vue 3
                         reference: pedido-1042
@@ -459,9 +467,9 @@ paths:
                   value:
                     object: balance
                     currency: BRL
-                    balance: 92020
-                    available: 82818
-                    reserved: 9202
+                    balance: 91030
+                    available: 81927
+                    reserved: 9103
                     debt: 0
                     withdrawable: 50000
                     provider:
@@ -472,9 +480,9 @@ paths:
                   value:
                     object: balance
                     currency: BRL
-                    balance: 92020
-                    available: 82818
-                    reserved: 9202
+                    balance: 91030
+                    available: 81927
+                    reserved: 9103
                     debt: 0
                     withdrawable: null
                     provider: null
@@ -520,6 +528,8 @@ webhooks:
     post:
       summary: Cobrança paga
       operationId: webhookChargePaid
+      tags: [Eventos de cobrança]
+      security: []
       description: |
         Enviado quando o pagamento é confirmado, no PIX ou no cartão. É o
         evento sobre o qual o seu sistema deve agir - liberar acesso,
@@ -553,7 +563,7 @@ webhooks:
                       amount: 10000
                       currency: BRL
                       platform_fee: 798
-                      net_amount: 9202
+                      net_amount: 9103
                       refunded_amount: 0
                       description: Curso de Vue 3
                       reference: pedido-1042
@@ -587,6 +597,8 @@ webhooks:
     post:
       summary: Cobrança recusada
       operationId: webhookChargeFailed
+      tags: [Eventos de cobrança]
+      security: []
       description: |
         Enviado quando a operadora do cartão recusa o pagamento, ou quando a
         análise de fraude o reprova. A cobrança está encerrada: não há
@@ -632,6 +644,8 @@ webhooks:
     post:
       summary: Cobrança em análise
       operationId: webhookChargeInAnalysis
+      tags: [Eventos de cobrança]
+      security: []
       description: |
         Enviado quando a análise de fraude segura um pagamento no cartão
         para revisão manual.
@@ -674,6 +688,8 @@ webhooks:
     post:
       summary: Cobrança estornada
       operationId: webhookChargeRefunded
+      tags: [Eventos de cobrança]
+      security: []
       description: |
         Enviado quando um estorno é concluído - tanto o que você pediu pela
         API quanto o feito por nós ou pelo provedor fora do seu fluxo.
@@ -709,7 +725,7 @@ webhooks:
                       amount: 10000
                       currency: BRL
                       platform_fee: 798
-                      net_amount: 9202
+                      net_amount: 9103
                       refunded_amount: 4000
                       description: Curso de Vue 3
                       reference: pedido-1042
@@ -748,6 +764,8 @@ webhooks:
     post:
       summary: Cobrança contestada
       operationId: webhookChargeChargedback
+      tags: [Eventos de cobrança]
+      security: []
       description: |
         Enviado quando o portador contesta a compra na operadora do cartão e
         o valor é levado de volta pela bandeira.
@@ -802,6 +820,8 @@ webhooks:
     post:
       summary: Saque pago
       operationId: webhookWithdrawalPaid
+      tags: [Eventos de saque]
+      security: []
       description: |
         Enviado quando o dinheiro chega à conta bancária do vendedor.
 
@@ -835,6 +855,339 @@ webhooks:
                       net_amount: 49633
                       requested_at: '2026-08-06T08:59:00+00:00'
                       processed_at: '2026-08-06T09:00:04+00:00'
+      responses:
+        '200':
+          description: Recebido.
+        default:
+          description: Fora da faixa 2xx, agenda nova tentativa.
+
+  med.opened:
+    post:
+      summary: Contestação de Pix aberta
+      operationId: webhookMedOpened
+      tags: [Eventos de contestação (MED)]
+      security: []
+      description: |
+        O comprador abriu uma contestação de Pix (MED) contra uma venda
+        sua. **O valor já saiu do seu saldo disponível** e ficou retido até
+        a decisão - você o vê em "Em contestação", e ele não é sacável.
+
+        Aja como em `charge.in_analysis`: **segure a entrega**. Uma
+        contestação pode terminar com o dinheiro devolvido ao comprador, e
+        aí o produto já entregue não volta.
+
+        Você tem `defence_deadline` para mandar a sua versão pelo painel.
+        O prazo não trava a decisão - ele diz de quem é a vez.
+
+        `opened_by` muda o que você está respondendo: `customer` é o
+        formulário público preenchido pela pessoa; `support` é a Vext
+        registrando o que ouviu por outro canal. As duas valem igual e
+        retêm igual, mas sustentam alegações diferentes.
+
+        Sobre quem contestou vai só o nome. O e-mail e o telefone ficam de
+        fora de propósito: a alegação é de fraude, você é a parte acusada,
+        e o contato de quem acusa seria um canal de pressão fora do
+        processo. Os dados de quem PAGOU continuam em `data.charge.customer`.
+      parameters:
+        - $ref: '#/components/parameters/SignatureHeader'
+        - $ref: '#/components/parameters/EventHeader'
+        - $ref: '#/components/parameters/DeliveryHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MedEvent'
+            examples:
+              aberta:
+                value:
+                  id: evt_01k2m4n6p8q0r2s4t6u8w0x2y4
+                  type: med.opened
+                  created_at: '2026-09-16T13:22:41+00:00'
+                  data:
+                    med:
+                      object: med
+                      id: med_01k2m4n5r3t7v9x1z3b5d7f9h1
+                      status: open
+                      reason: Não reconheço esta compra no meu extrato.
+                      held_amount: 10000
+                      currency: BRL
+                      end_to_end_id: E12345678202608041200
+                      purchase_date: '2026-08-04'
+                      opened_by: customer
+                      claimant:
+                        name: Maria Souza
+                      evidence:
+                        - id: 41
+                          side: claimant
+                          filename: extrato-do-banco.pdf
+                          mime: application/pdf
+                          size: 184320
+                          sent_at: '2026-09-16T13:22:40+00:00'
+                      events:
+                        - type: opened
+                          at: '2026-09-16T13:22:40+00:00'
+                          held_cents: 10000
+                          charge_code: ch_01k1y6r6m6q2x0p3d9v4t7c8n2
+                          evidence_count: 1
+                      opened_at: '2026-09-16T13:22:40+00:00'
+                      defence_deadline: '2026-09-23T13:22:40+00:00'
+                      responded_at: null
+                      decided_at: null
+                      decision_note: null
+                      resolved_by: null
+                      refund: null
+                    charge:
+                      object: charge
+                      id: ch_01k1y6r6m6q2x0p3d9v4t7c8n2
+                      status: paid
+                      payment_method: pix
+                      amount: 10000
+                      currency: BRL
+                      platform_fee: 798
+                      net_amount: 9103
+                      refunded_amount: 0
+                      description: Curso de Vue 3
+                      reference: pedido-1042
+                      metadata:
+                        carrinho: cart_88f21
+                      customer:
+                        name: João Comprador
+                        email: joao@exemplo.com.br
+                        document: '111.***.***-35'
+                      pix:
+                        qr_code: 00020101021226840014br.gov.bcb.pix2562qrcodepix.example.com/v2/abcd1234
+                        expires_at: '2026-08-05T14:00:00+00:00'
+                        end_to_end_id: E12345678202608041200
+                      created_at: '2026-08-04T14:00:00+00:00'
+                      paid_at: '2026-08-04T14:03:11+00:00'
+                      expired_at: null
+                      refunded_at: null
+      responses:
+        '200':
+          description: Recebido.
+        default:
+          description: Fora da faixa 2xx, agenda nova tentativa.
+
+  med.approved:
+    post:
+      summary: Contestação de Pix perdida
+      operationId: webhookMedApproved
+      tags: [Eventos de contestação (MED)]
+      security: []
+      description: |
+        A contestação foi **deferida**: o comprador foi estornado com o seu
+        dinheiro, e a retenção virou débito definitivo.
+
+        **Leia o nome com atenção.** `approved` descreve a decisão sobre a
+        CONTESTAÇÃO, não sobre você - é a má notícia. O nome espelha o
+        status interno (`status: approved`) para que evento, painel e API
+        falem uma língua só; quem quiser o placar tem `status` e
+        `resolved_by`, e o painel mostra "Perdida".
+
+        Aja revertendo o que `med.opened` mandou segurar: **cancele o
+        acesso, o envio ou a assinatura**. A venda está devolvida.
+
+        `resolved_by` diz de onde veio o desfecho: `platform` é a Vext
+        decidindo, `seller` é você tendo assumido a contestação pelo
+        painel. `data.charge` vem com `status` e `refunded_amount` já
+        atualizados.
+      parameters:
+        - $ref: '#/components/parameters/SignatureHeader'
+        - $ref: '#/components/parameters/EventHeader'
+        - $ref: '#/components/parameters/DeliveryHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MedEvent'
+            examples:
+              perdida:
+                value:
+                  id: evt_01k2p7q9s1u3w5y7a9c1e3g5j7
+                  type: med.approved
+                  created_at: '2026-09-19T10:41:08+00:00'
+                  data:
+                    med:
+                      object: med
+                      id: med_01k2m4n5r3t7v9x1z3b5d7f9h1
+                      status: approved
+                      reason: Não reconheço esta compra no meu extrato.
+                      held_amount: 10000
+                      currency: BRL
+                      end_to_end_id: E12345678202608041200
+                      purchase_date: '2026-08-04'
+                      opened_by: customer
+                      claimant:
+                        name: Maria Souza
+                      evidence:
+                        - id: 41
+                          side: claimant
+                          filename: extrato-do-banco.pdf
+                          mime: application/pdf
+                          size: 184320
+                          sent_at: '2026-09-16T13:22:40+00:00'
+                        - id: 42
+                          side: seller
+                          filename: comprovante-de-entrega.png
+                          mime: image/png
+                          size: 96144
+                          sent_at: '2026-09-17T09:10:02+00:00'
+                      events:
+                        - type: opened
+                          at: '2026-09-16T13:22:40+00:00'
+                          held_cents: 10000
+                          charge_code: ch_01k1y6r6m6q2x0p3d9v4t7c8n2
+                          evidence_count: 1
+                        - type: seller_defence
+                          at: '2026-09-17T09:10:02+00:00'
+                          files: 1
+                        - type: approved
+                          at: '2026-09-19T10:41:07+00:00'
+                          released_cents: 10000
+                      opened_at: '2026-09-16T13:22:40+00:00'
+                      defence_deadline: '2026-09-23T13:22:40+00:00'
+                      responded_at: '2026-09-17T09:10:02+00:00'
+                      decided_at: '2026-09-19T10:41:07+00:00'
+                      decision_note: Evidências não comprovam a entrega ao titular do Pix.
+                      resolved_by: platform
+                      refund:
+                        object: refund
+                        id: re_01k2p7q8r0t2v4x6z8b0d2f4h6
+                        status: refunded
+                    charge:
+                      object: charge
+                      id: ch_01k1y6r6m6q2x0p3d9v4t7c8n2
+                      status: refunded
+                      payment_method: pix
+                      amount: 10000
+                      currency: BRL
+                      platform_fee: 798
+                      net_amount: 9103
+                      refunded_amount: 10000
+                      description: Curso de Vue 3
+                      reference: pedido-1042
+                      metadata:
+                        carrinho: cart_88f21
+                      customer:
+                        name: João Comprador
+                        email: joao@exemplo.com.br
+                        document: '111.***.***-35'
+                      pix:
+                        qr_code: 00020101021226840014br.gov.bcb.pix2562qrcodepix.example.com/v2/abcd1234
+                        expires_at: '2026-08-05T14:00:00+00:00'
+                        end_to_end_id: E12345678202608041200
+                      created_at: '2026-08-04T14:00:00+00:00'
+                      paid_at: '2026-08-04T14:03:11+00:00'
+                      expired_at: null
+                      refunded_at: '2026-09-19T10:41:07+00:00'
+      responses:
+        '200':
+          description: Recebido.
+        default:
+          description: Fora da faixa 2xx, agenda nova tentativa.
+
+  med.rejected:
+    post:
+      summary: Contestação de Pix ganha
+      operationId: webhookMedRejected
+      tags: [Eventos de contestação (MED)]
+      security: []
+      description: |
+        A contestação foi **indeferida**: o valor retido voltou ao seu
+        saldo disponível e a venda segue de pé.
+
+        Como em `med.approved`, o nome descreve a decisão sobre a
+        CONTESTAÇÃO - aqui é a boa notícia. O painel mostra "Ganha".
+
+        Aja liberando o que `med.opened` mandou segurar: **a entrega pode
+        seguir**. `data.charge` continua `paid`, e `refund` vem `null`
+        porque não houve estorno.
+
+        Não existe reabertura: a trava é de banco, uma contestação por
+        venda, para sempre. Este desfecho é final.
+      parameters:
+        - $ref: '#/components/parameters/SignatureHeader'
+        - $ref: '#/components/parameters/EventHeader'
+        - $ref: '#/components/parameters/DeliveryHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MedEvent'
+            examples:
+              ganha:
+                value:
+                  id: evt_01k2p9r1t3v5x7z9b1d3f5h7k9
+                  type: med.rejected
+                  created_at: '2026-09-19T11:02:55+00:00'
+                  data:
+                    med:
+                      object: med
+                      id: med_01k2m4n5r3t7v9x1z3b5d7f9h1
+                      status: rejected
+                      reason: Não reconheço esta compra no meu extrato.
+                      held_amount: 10000
+                      currency: BRL
+                      end_to_end_id: E12345678202608041200
+                      purchase_date: '2026-08-04'
+                      opened_by: customer
+                      claimant:
+                        name: Maria Souza
+                      evidence:
+                        - id: 42
+                          side: seller
+                          filename: comprovante-de-entrega.png
+                          mime: image/png
+                          size: 96144
+                          sent_at: '2026-09-17T09:10:02+00:00'
+                      events:
+                        - type: opened
+                          at: '2026-09-16T13:22:40+00:00'
+                          held_cents: 10000
+                          charge_code: ch_01k1y6r6m6q2x0p3d9v4t7c8n2
+                          evidence_count: 0
+                        - type: seller_defence
+                          at: '2026-09-17T09:10:02+00:00'
+                          files: 1
+                        - type: rejected
+                          at: '2026-09-19T11:02:54+00:00'
+                          released_cents: 10000
+                      opened_at: '2026-09-16T13:22:40+00:00'
+                      defence_deadline: '2026-09-23T13:22:40+00:00'
+                      responded_at: '2026-09-17T09:10:02+00:00'
+                      decided_at: '2026-09-19T11:02:54+00:00'
+                      decision_note: Entrega comprovada ao titular do Pix.
+                      resolved_by: platform
+                      refund: null
+                    charge:
+                      object: charge
+                      id: ch_01k1y6r6m6q2x0p3d9v4t7c8n2
+                      status: paid
+                      payment_method: pix
+                      amount: 10000
+                      currency: BRL
+                      platform_fee: 798
+                      net_amount: 9103
+                      refunded_amount: 0
+                      description: Curso de Vue 3
+                      reference: pedido-1042
+                      metadata:
+                        carrinho: cart_88f21
+                      customer:
+                        name: João Comprador
+                        email: joao@exemplo.com.br
+                        document: '111.***.***-35'
+                      pix:
+                        qr_code: 00020101021226840014br.gov.bcb.pix2562qrcodepix.example.com/v2/abcd1234
+                        expires_at: '2026-08-05T14:00:00+00:00'
+                        end_to_end_id: E12345678202608041200
+                      created_at: '2026-08-04T14:00:00+00:00'
+                      paid_at: '2026-08-04T14:03:11+00:00'
+                      expired_at: null
+                      refunded_at: null
       responses:
         '200':
           description: Recebido.
@@ -1230,8 +1583,10 @@ components:
           allOf:
             - $ref: '#/components/schemas/Cents'
           description: |
-            O que fica com o vendedor, em centavos inteiros
-            (`amount - platform_fee`).
+            O que fica com o vendedor, em centavos inteiros: `amount` menos
+            a nossa taxa e menos a taxa do meio de pagamento, que é
+            descontada direto do recebimento dele. Por isso
+            `amount - platform_fee` dá um número MAIOR que este.
         refunded_amount:
           allOf:
             - $ref: '#/components/schemas/Cents'
@@ -1567,6 +1922,9 @@ components:
             - charge.refunded
             - charge.chargedback
             - withdrawal.paid
+            - med.opened
+            - med.approved
+            - med.rejected
         created_at:
           type: string
           format: date-time
@@ -1654,6 +2012,265 @@ components:
                       type: [string, 'null']
                       format: date-time
 
+    MedEvidence:
+      type: object
+      description: |
+        Um anexo da contestação, de qualquer um dos dois lados.
+
+        **Não há link.** O disco é privado e os arquivos são servidos por
+        streaming autenticado - é material de litígio sobre uma pessoa
+        nomeada, e um endereço que funcionasse fora da sessão viveria no
+        log de quem recebeu o webhook e poderia ser encaminhado. O
+        conteúdo se abre no painel; aqui fica o que foi anexado, por qual
+        lado e quando.
+      required: [id, side, filename, mime, size, sent_at]
+      properties:
+        id:
+          type: integer
+          description: Identificador do anexo dentro da contestação.
+          example: 41
+        side:
+          type: string
+          enum: [claimant, seller]
+          description: |
+            `claimant` é o comprador, ao abrir a contestação. `seller` é a
+            sua loja, ao se defender.
+        filename:
+          type: string
+          description: O nome do arquivo como quem enviou o nomeou.
+          example: extrato-do-banco.pdf
+        mime:
+          type: string
+          example: application/pdf
+        size:
+          type: integer
+          description: Tamanho em bytes.
+          example: 184320
+        sent_at:
+          type: string
+          format: date-time
+
+    MedTimelineEvent:
+      type: object
+      description: |
+        Um passo da linha do tempo da contestação, em ordem cronológica.
+
+        O que aconteceu, quando, e os números do passo. **Quem agiu não
+        vai** - nas decisões, quem age é um analista da Vext, e o quadro
+        interno da plataforma não é parte do seu contrato.
+
+        Trate `type` como aberto: passos novos podem aparecer, e um
+        `switch` sem ramo padrão quebraria na primeira contestação que
+        seguisse um caminho novo.
+      required: [type, at]
+      properties:
+        type:
+          type: string
+          description: |
+            Os passos em uso hoje:
+
+            - `opened` - o comprador abriu pelo formulário público
+            - `opened_by_admin` - a Vext abriu registrando outro canal
+            - `seller_defence` - você enviou contra-evidência
+            - `refund_failed` - uma tentativa de estorno não passou; a
+              retenção continua e a Vext tenta de novo
+            - `approved` / `approved_without_refund` - deferida
+            - `seller_accepted` / `seller_accepted_without_refund` -
+              deferida porque você assumiu a contestação
+            - `rejected` - indeferida
+          example: opened
+        at:
+          type: string
+          format: date-time
+        held_cents:
+          allOf:
+            - $ref: '#/components/schemas/Cents'
+          description: Quanto foi retido neste passo. Só em `opened`.
+        released_cents:
+          allOf:
+            - $ref: '#/components/schemas/Cents'
+          description: Quanto saiu da retenção. Só nos passos de desfecho.
+        evidence_count:
+          type: integer
+          description: Quantos anexos vieram com a abertura.
+        files:
+          type: integer
+          description: Quantos anexos vieram na sua defesa.
+        charge_code:
+          type: string
+          description: A venda contestada. Só em `opened`.
+
+    Med:
+      type: object
+      description: |
+        Uma contestação de Pix (MED) contra uma venda sua.
+
+        Mesma forma nos três eventos - abertura e desfechos. O que muda é
+        o estado dentro dela: guarde o caso pelo `id` e atualize-o a cada
+        evento, em vez de esperar corpos diferentes por tipo.
+      required:
+        - object
+        - id
+        - status
+        - reason
+        - held_amount
+        - currency
+        - end_to_end_id
+        - purchase_date
+        - opened_by
+        - claimant
+        - evidence
+        - events
+        - opened_at
+        - defence_deadline
+        - responded_at
+        - decided_at
+        - decision_note
+        - resolved_by
+        - refund
+      properties:
+        object:
+          type: string
+          const: med
+        id:
+          type: string
+          description: |
+            O número de protocolo. É o mesmo que o comprador recebe por
+            e-mail e o mesmo que aparece no painel.
+          example: med_01k2m4n5r3t7v9x1z3b5d7f9h1
+        status:
+          type: string
+          enum: [open, under_review, approved, rejected, refund_failed]
+          description: |
+            **`approved` é a contestação deferida - ou seja, você perdeu**;
+            `rejected` é você ganhando. O adjetivo descreve a decisão sobre
+            a contestação, não sobre a loja.
+
+            `open` e `under_review` ainda retêm o valor; `refund_failed`
+            também, e significa que a decisão saiu contra você mas o
+            estorno ainda não passou. Os eventos entregues carregam
+            `open`, `approved` ou `rejected` - os outros dois são estados
+            internos que você vê no painel.
+        reason:
+          type: string
+          description: O que o comprador escreveu ao contestar. Texto livre.
+          example: Não reconheço esta compra no meu extrato.
+        held_amount:
+          allOf:
+            - $ref: '#/components/schemas/Cents'
+          description: |
+            Quanto saiu do seu saldo disponível, em centavos inteiros.
+            Congelado na abertura: é o valor que a decisão vai devolver a
+            você ou ao comprador, e não um recálculo.
+        currency:
+          type: string
+          const: BRL
+        end_to_end_id:
+          type: string
+          description: O identificador do Pix contestado.
+          example: E12345678202608041200
+        purchase_date:
+          type: string
+          format: date
+          description: |
+            A data que o comprador informou ao contestar, como ele a
+            digitou. Pode não ser a de `charge.paid_at`.
+        opened_by:
+          type: string
+          enum: [customer, support]
+          description: |
+            `customer` é o formulário público preenchido pela pessoa;
+            `support` é a Vext registrando o que ouviu por outro canal.
+            As duas retêm igual, mas sustentam alegações diferentes - vale
+            saber o que você está respondendo.
+        claimant:
+          type: object
+          description: |
+            Quem abriu a contestação. **Só o nome.**
+
+            E-mail e telefone ficam de fora de propósito: a alegação é de
+            fraude e você é a parte acusada - o contato de quem acusa seria
+            um canal de pressão fora do processo. O nome vai porque sem ele
+            você não reencontra a venda nos seus registros.
+
+            Para os dados de quem PAGOU, use `data.charge.customer`: aquele
+            é o seu cliente, gravado no checkout, e você já o recebe em
+            `charge.paid`. Podem ser pessoas diferentes.
+          required: [name]
+          properties:
+            name:
+              type: string
+              example: Maria Souza
+        evidence:
+          type: array
+          description: |
+            Os anexos dos DOIS lados, em ordem de envio. Vem vazio quando
+            ninguém anexou nada.
+          items:
+            $ref: '#/components/schemas/MedEvidence'
+        events:
+          type: array
+          description: A linha do tempo da contestação, do mais antigo ao mais novo.
+          items:
+            $ref: '#/components/schemas/MedTimelineEvent'
+        opened_at:
+          type: string
+          format: date-time
+        defence_deadline:
+          type: [string, 'null']
+          format: date-time
+          description: |
+            Até quando você pode mandar a sua versão pelo painel. Não trava
+            a decisão da Vext - diz de quem é a vez.
+        responded_at:
+          type: [string, 'null']
+          format: date-time
+          description: Quando você enviou defesa. `null` se não enviou.
+        decided_at:
+          type: [string, 'null']
+          format: date-time
+          description: '`null` enquanto a contestação estiver aberta.'
+        decision_note:
+          type: [string, 'null']
+          description: O motivo da decisão, escrito por quem decidiu.
+        resolved_by:
+          type: [string, 'null']
+          enum: [platform, seller, null]
+          description: |
+            De onde veio o desfecho: `platform` é a Vext decidindo,
+            `seller` é você tendo assumido a contestação pelo painel.
+            `null` enquanto não houver decisão.
+        refund:
+          type: [object, 'null']
+          description: |
+            O estorno feito ao comprador. `null` em `med.opened` e em
+            `med.rejected` - e também numa contestação deferida cuja venda
+            já havia sido devolvida por outro caminho.
+          required: [object, id, status]
+          properties:
+            object:
+              type: string
+              const: refund
+            id:
+              type: string
+              example: re_01k2p7q8r0t2v4x6z8b0d2f4h6
+            status:
+              $ref: '#/components/schemas/RefundStatus'
+
+    MedEvent:
+      allOf:
+        - $ref: '#/components/schemas/EventEnvelope'
+        - type: object
+          properties:
+            data:
+              type: object
+              required: [med, charge]
+              properties:
+                med:
+                  $ref: '#/components/schemas/Med'
+                charge:
+                  $ref: '#/components/schemas/WebhookCharge'
+
   examples:
     ChargePendente:
       summary: Cobrança criada, aguardando pagamento
@@ -1665,7 +2282,7 @@ components:
         amount: 10000
         currency: BRL
         platform_fee: 798
-        net_amount: 9202
+        net_amount: 9103
         refunded_amount: 0
         description: Curso de Vue 3
         reference: pedido-1042
@@ -1695,7 +2312,7 @@ components:
         amount: 10000
         currency: BRL
         platform_fee: 798
-        net_amount: 9202
+        net_amount: 9103
         refunded_amount: 0
         description: Curso de Vue 3
         reference: pedido-1042

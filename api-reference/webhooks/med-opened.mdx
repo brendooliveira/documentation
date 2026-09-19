@@ -1,0 +1,41 @@
+---
+title: "med.opened"
+description: "Enviado quando o comprador abre uma contestação de Pix. O valor sai do saldo e fica retido até a decisão."
+icon: "shield-alert"
+openapi: "/api-reference/openapi.yaml webhook med.opened"
+---
+
+<Warning>
+  **Segure a entrega.** Uma contestação pode terminar com o dinheiro devolvido ao comprador, e o
+  produto já entregue não volta. Confira a assinatura antes de gravar qualquer coisa. Ver
+  [Verificar a assinatura](/webhooks/assinatura).
+</Warning>
+
+Trate este evento como um [`charge.in_analysis`](/api-reference/webhooks/charge-in-analysis) de Pix:
+é um aviso de espera, não um desfecho. O resultado chega depois, como
+[`med.approved`](/api-reference/webhooks/med-approved) ou
+[`med.rejected`](/api-reference/webhooks/med-rejected).
+
+Quando o evento chega, o valor já saiu do saldo disponível e não é sacável — ele aparece em "Em
+contestação" no painel. `held_amount` é o que foi retido, congelado na abertura.
+
+## O prazo diz de quem é a vez
+
+`defence_deadline` é até quando você pode enviar a sua versão pelo painel. Ele não trava a decisão
+da Vext: um caso sem defesa é decidido do mesmo jeito, com o que houver nos autos.
+
+## Quem contestou não é quem pagou
+
+`data.med.claimant` traz **só o nome** de quem abriu a contestação. Os dados de quem pagou continuam
+em `data.charge.customer`, gravados no checkout — e podem ser outra pessoa, que é justamente a
+alegação numa contestação por fraude.
+
+`opened_by` muda o que você está respondendo: `customer` é o formulário público preenchido pela
+pessoa, `support` é a Vext registrando o que ouviu por outro canal. As duas retêm igual, mas
+sustentam alegações diferentes.
+
+## Guarde o caso pelo `id`
+
+Os três eventos de MED carregam o mesmo objeto `med`, com o mesmo `id`, em estados diferentes.
+Guarde o caso e atualize-o a cada evento, em vez de esperar corpos diferentes por tipo — é o que
+evita reescrever o seu parser quando um passo novo aparecer na linha do tempo.

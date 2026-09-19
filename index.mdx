@@ -18,7 +18,7 @@ cobrança, mostra o QR ao comprador, e nós avisamos quando o dinheiro entra.
     As cinco operações, com playground.
   </Card>
   <Card title="Webhooks" icon="webhook" href="/webhooks/visao-geral">
-    Os seis eventos e como conferir a assinatura.
+    Os nove eventos e como conferir a assinatura.
   </Card>
   <Card title="Receitas" icon="route" href="/receitas/checkout-pix">
     Fluxos completos, do checkout à conciliação.
@@ -76,7 +76,7 @@ documentação fica previsível — e você evita os quatro tropeços mais comun
 | [Estornar cobrança](/api-reference/cobrancas/estornar) | `POST /v1/charges/{code}/refund` |
 | [Consultar saldo](/api-reference/saldo/consultar) | `GET /v1/balance` |
 
-**Seis eventos**, que nós enviamos para o seu sistema:
+**Nove eventos**, que nós enviamos para o seu sistema:
 
 | Evento | Quando dispara |
 | --- | --- |
@@ -85,6 +85,9 @@ documentação fica previsível — e você evita os quatro tropeços mais comun
 | [`charge.in_analysis`](/api-reference/webhooks/charge-in-analysis) | A análise de fraude segura um pagamento no cartão |
 | [`charge.refunded`](/api-reference/webhooks/charge-refunded) | Um estorno é concluído |
 | [`charge.chargedback`](/api-reference/webhooks/charge-chargedback) | O portador contesta a compra na operadora |
+| [`med.opened`](/api-reference/webhooks/med-opened) | O comprador abre uma contestação de Pix |
+| [`med.approved`](/api-reference/webhooks/med-approved) | A contestação é deferida — a venda é devolvida |
+| [`med.rejected`](/api-reference/webhooks/med-rejected) | A contestação é indeferida — a venda segue de pé |
 | [`withdrawal.paid`](/api-reference/webhooks/withdrawal-paid) | O saque cai na conta do vendedor |
 
 ## Quatro coisas que vale saber de antemão

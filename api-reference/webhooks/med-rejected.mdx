@@ -1,0 +1,25 @@
+---
+title: "med.rejected"
+description: "Enviado quando a contestação de Pix é indeferida. O valor retido volta ao saldo e a venda segue de pé."
+icon: "thumbs-up"
+openapi: "/api-reference/openapi.yaml webhook med.rejected"
+---
+
+<Warning>
+  **`rejected` é a contestação indeferida — ou seja, você ganhou.** Como em
+  [`med.approved`](/api-reference/webhooks/med-approved), o adjetivo descreve a decisão sobre a
+  contestação, não sobre a sua loja.
+</Warning>
+
+É aqui que você libera o que [`med.opened`](/api-reference/webhooks/med-opened) mandou segurar: a
+entrega pode seguir. O valor retido voltou ao saldo disponível.
+
+`data.charge` continua `paid`, e `refund` vem `null` porque não houve estorno.
+
+Confira a assinatura antes de agir. Ver [Verificar a assinatura](/webhooks/assinatura).
+
+## Este desfecho é final
+
+Não existe reabertura: a trava é de banco, uma contestação por venda, para sempre. Recebido este
+evento, a venda não volta a ser contestada — você pode encerrar o caso no seu lado sem deixar um
+estado pendente esperando por um evento que não vem.

@@ -96,15 +96,26 @@
             "pages": ["api-reference/saldo/consultar"]
           },
           {
-            "group": "Eventos de webhook",
+            "group": "Eventos de cobrança",
             "pages": [
               "api-reference/webhooks/charge-paid",
               "api-reference/webhooks/charge-failed",
               "api-reference/webhooks/charge-in-analysis",
               "api-reference/webhooks/charge-refunded",
-              "api-reference/webhooks/charge-chargedback",
-              "api-reference/webhooks/withdrawal-paid"
+              "api-reference/webhooks/charge-chargedback"
             ]
+          },
+          {
+            "group": "Eventos de contestação (MED)",
+            "pages": [
+              "api-reference/webhooks/med-opened",
+              "api-reference/webhooks/med-approved",
+              "api-reference/webhooks/med-rejected"
+            ]
+          },
+          {
+            "group": "Eventos de saque",
+            "pages": ["api-reference/webhooks/withdrawal-paid"]
           }
         ]
       }

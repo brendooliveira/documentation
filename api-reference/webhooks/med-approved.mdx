@@ -1,0 +1,36 @@
+---
+title: "med.approved"
+description: "Enviado quando a contestação de Pix é deferida. O comprador foi estornado e a venda está devolvida."
+icon: "thumbs-down"
+openapi: "/api-reference/openapi.yaml webhook med.approved"
+---
+
+<Warning>
+  **`approved` é a contestação deferida — ou seja, você perdeu.** O adjetivo descreve a decisão sobre
+  a contestação, não sobre a sua loja. Um sistema que leia este evento como "aprovado para mim"
+  libera acesso numa venda que acabou de ser devolvida.
+</Warning>
+
+É aqui que você reverte o que [`med.opened`](/api-reference/webhooks/med-opened) mandou segurar:
+cancele o acesso, o envio ou a assinatura. A retenção virou débito definitivo e o dinheiro já foi
+para o comprador.
+
+O nome espelha o status interno (`status: approved`) para que evento, painel e API falem uma língua
+só. Quem quiser o placar tem `status` e `resolved_by`; o painel mostra "Perdida".
+
+Confira a assinatura antes de agir. Ver [Verificar a assinatura](/webhooks/assinatura).
+
+## O que vem atualizado
+
+`data.charge` chega com `status` e `refunded_amount` já atualizados, e `data.med.refund` descreve o
+estorno feito ao comprador — do mesmo jeito que em
+[`charge.refunded`](/api-reference/webhooks/charge-refunded), para o seu código ler os dois pelo
+mesmo caminho.
+
+`resolved_by` diz de onde veio o desfecho: `platform` é a Vext decidindo, `seller` é você tendo
+assumido a contestação pelo painel.
+
+<Note>
+  `refund` vem `null` numa contestação deferida cuja venda já havia sido devolvida por outro
+  caminho. Leia `data.charge.refunded_amount` para saber quanto voltou, e não a presença do objeto.
+</Note>
