@@ -13,6 +13,12 @@ import NotaIdempotencia from "/snippets/nota-idempotencia.mdx";
 <NotaIdempotencia />
 
 <Note>
+  `items` é **obrigatório**. Mande pelo menos um item, e a soma de `quantity * amount` de todos eles
+  precisa bater exatamente com o `amount` da cobrança — senão a chamada volta `422`
+  `items_do_not_match_amount`. Vendendo uma coisa só, mande um item único com o valor cheio.
+</Note>
+
+<Note>
   A resposta traz `pix.qr_code`, o payload copia-e-cola. A **imagem** do QR não é devolvida: você a
   gera localmente a partir do payload. Ver [Checkout PIX de ponta a ponta](/receitas/checkout-pix).
 </Note>

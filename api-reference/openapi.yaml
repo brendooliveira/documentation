@@ -97,14 +97,6 @@ tags:
     description: Criação, consulta e estorno de cobranças PIX.
   - name: Saldo
     description: Quanto o vendedor tem e quanto pode sacar.
-  - name: Eventos de cobrança
-    description: O que chamamos no seu endpoint quando uma venda muda de estado.
-  - name: Eventos de saque
-    description: O que chamamos no seu endpoint quando o dinheiro sai para o vendedor.
-  - name: Eventos de contestação (MED)
-    description: |
-      Abertura e desfecho de uma contestação de Pix. Veja
-      [Visão geral dos webhooks](/webhooks/visao-geral).
 
 paths:
   /v1/charges:
@@ -132,7 +124,11 @@ paths:
               $ref: '#/components/schemas/CreateChargeRequest'
             examples:
               simples:
-                summary: Cobrança de R$ 100,00
+                summary: Cobrança de R$ 100,00, um item
+                description: |
+                  Vendendo uma coisa só, `items` tem um item único com o
+                  valor cheio - `quantity * amount` precisa bater com o
+                  `amount` da cobrança.
                 value:
                   amount: 10000
                   description: Curso de Vue 3
@@ -148,8 +144,13 @@ paths:
                     document_type: CPF
                     phone_ddd: '11'
                     phone_number: '987654321'
+                  items:
+                    - code: curso-vue
+                      description: Curso de Vue 3
+                      quantity: 1
+                      amount: 10000
               comItens:
-                summary: Com itens discriminados
+                summary: Carrinho com vários itens
                 description: |
                   A soma de `quantity * amount` de todos os itens precisa
                   bater exatamente com `amount`. Sem essa conferência o
@@ -292,7 +293,7 @@ paths:
                           document: '111.***.***-35'
                         pix:
                           qr_code: 00020101021226840014br.gov.bcb.pix2562qrcodepix.example.com/v2/abcd1234
-                          expires_at: '2026-08-05T14:00:00+00:00'
+                          expires_at: '2026-08-04T15:00:00+00:00'
                           end_to_end_id: E12345678202608041200
                         created_at: '2026-08-04T14:00:00+00:00'
                         paid_at: '2026-08-04T14:03:11+00:00'
@@ -467,9 +468,9 @@ paths:
                   value:
                     object: balance
                     currency: BRL
-                    balance: 91030
-                    available: 81927
-                    reserved: 9103
+                    balance: 92020
+                    available: 82818
+                    reserved: 9202
                     debt: 0
                     withdrawable: 50000
                     provider:
@@ -480,9 +481,9 @@ paths:
                   value:
                     object: balance
                     currency: BRL
-                    balance: 91030
-                    available: 81927
-                    reserved: 9103
+                    balance: 92020
+                    available: 82818
+                    reserved: 9202
                     debt: 0
                     withdrawable: null
                     provider: null
@@ -528,8 +529,6 @@ webhooks:
     post:
       summary: Cobrança paga
       operationId: webhookChargePaid
-      tags: [Eventos de cobrança]
-      security: []
       description: |
         Enviado quando o pagamento é confirmado, no PIX ou no cartão. É o
         evento sobre o qual o seu sistema deve agir - liberar acesso,
@@ -576,7 +575,7 @@ webhooks:
                         document: '111.***.***-35'
                       pix:
                         qr_code: 00020101021226840014br.gov.bcb.pix2562qrcodepix.example.com/v2/abcd1234
-                        expires_at: '2026-08-05T14:00:00+00:00'
+                        expires_at: '2026-08-04T15:00:00+00:00'
                         end_to_end_id: E12345678202608041200
                       created_at: '2026-08-04T14:00:00+00:00'
                       paid_at: '2026-08-04T14:03:11+00:00'
@@ -597,8 +596,6 @@ webhooks:
     post:
       summary: Cobrança recusada
       operationId: webhookChargeFailed
-      tags: [Eventos de cobrança]
-      security: []
       description: |
         Enviado quando a operadora do cartão recusa o pagamento, ou quando a
         análise de fraude o reprova. A cobrança está encerrada: não há
@@ -644,8 +641,6 @@ webhooks:
     post:
       summary: Cobrança em análise
       operationId: webhookChargeInAnalysis
-      tags: [Eventos de cobrança]
-      security: []
       description: |
         Enviado quando a análise de fraude segura um pagamento no cartão
         para revisão manual.
@@ -688,8 +683,6 @@ webhooks:
     post:
       summary: Cobrança estornada
       operationId: webhookChargeRefunded
-      tags: [Eventos de cobrança]
-      security: []
       description: |
         Enviado quando um estorno é concluído - tanto o que você pediu pela
         API quanto o feito por nós ou pelo provedor fora do seu fluxo.
@@ -738,7 +731,7 @@ webhooks:
                         document: '111.***.***-35'
                       pix:
                         qr_code: 00020101021226840014br.gov.bcb.pix2562qrcodepix.example.com/v2/abcd1234
-                        expires_at: '2026-08-05T14:00:00+00:00'
+                        expires_at: '2026-08-04T15:00:00+00:00'
                         end_to_end_id: E12345678202608041200
                       created_at: '2026-08-04T14:00:00+00:00'
                       paid_at: '2026-08-04T14:03:11+00:00'
@@ -764,8 +757,6 @@ webhooks:
     post:
       summary: Cobrança contestada
       operationId: webhookChargeChargedback
-      tags: [Eventos de cobrança]
-      security: []
       description: |
         Enviado quando o portador contesta a compra na operadora do cartão e
         o valor é levado de volta pela bandeira.
@@ -820,8 +811,6 @@ webhooks:
     post:
       summary: Saque pago
       operationId: webhookWithdrawalPaid
-      tags: [Eventos de saque]
-      security: []
       description: |
         Enviado quando o dinheiro chega à conta bancária do vendedor.
 
@@ -865,8 +854,6 @@ webhooks:
     post:
       summary: Contestação de Pix aberta
       operationId: webhookMedOpened
-      tags: [Eventos de contestação (MED)]
-      security: []
       description: |
         O comprador abriu uma contestação de Pix (MED) contra uma venda
         sua. **O valor já saiu do seu saldo disponível** e ficou retido até
@@ -952,12 +939,12 @@ webhooks:
                       metadata:
                         carrinho: cart_88f21
                       customer:
-                        name: João Comprador
-                        email: joao@exemplo.com.br
-                        document: '111.***.***-35'
+                        name: Maria Souza
+                        email: maria@exemplo.com.br
+                        document: '222.***.***-47'
                       pix:
                         qr_code: 00020101021226840014br.gov.bcb.pix2562qrcodepix.example.com/v2/abcd1234
-                        expires_at: '2026-08-05T14:00:00+00:00'
+                        expires_at: '2026-08-04T15:00:00+00:00'
                         end_to_end_id: E12345678202608041200
                       created_at: '2026-08-04T14:00:00+00:00'
                       paid_at: '2026-08-04T14:03:11+00:00'
@@ -973,8 +960,6 @@ webhooks:
     post:
       summary: Contestação de Pix perdida
       operationId: webhookMedApproved
-      tags: [Eventos de contestação (MED)]
-      security: []
       description: |
         A contestação foi **deferida**: o comprador foi estornado com o seu
         dinheiro, e a retenção virou débito definitivo.
@@ -1071,12 +1056,12 @@ webhooks:
                       metadata:
                         carrinho: cart_88f21
                       customer:
-                        name: João Comprador
-                        email: joao@exemplo.com.br
-                        document: '111.***.***-35'
+                        name: Maria Souza
+                        email: maria@exemplo.com.br
+                        document: '222.***.***-47'
                       pix:
                         qr_code: 00020101021226840014br.gov.bcb.pix2562qrcodepix.example.com/v2/abcd1234
-                        expires_at: '2026-08-05T14:00:00+00:00'
+                        expires_at: '2026-08-04T15:00:00+00:00'
                         end_to_end_id: E12345678202608041200
                       created_at: '2026-08-04T14:00:00+00:00'
                       paid_at: '2026-08-04T14:03:11+00:00'
@@ -1092,8 +1077,6 @@ webhooks:
     post:
       summary: Contestação de Pix ganha
       operationId: webhookMedRejected
-      tags: [Eventos de contestação (MED)]
-      security: []
       description: |
         A contestação foi **indeferida**: o valor retido voltou ao seu
         saldo disponível e a venda segue de pé.
@@ -1177,12 +1160,12 @@ webhooks:
                       metadata:
                         carrinho: cart_88f21
                       customer:
-                        name: João Comprador
-                        email: joao@exemplo.com.br
-                        document: '111.***.***-35'
+                        name: Maria Souza
+                        email: maria@exemplo.com.br
+                        document: '222.***.***-47'
                       pix:
                         qr_code: 00020101021226840014br.gov.bcb.pix2562qrcodepix.example.com/v2/abcd1234
-                        expires_at: '2026-08-05T14:00:00+00:00'
+                        expires_at: '2026-08-04T15:00:00+00:00'
                         end_to_end_id: E12345678202608041200
                       created_at: '2026-08-04T14:00:00+00:00'
                       paid_at: '2026-08-04T14:03:11+00:00'
@@ -1427,7 +1410,7 @@ components:
 
     CreateChargeRequest:
       type: object
-      required: [amount, customer]
+      required: [amount, customer, items]
       properties:
         amount:
           allOf:
@@ -1495,12 +1478,19 @@ components:
         customer:
           $ref: '#/components/schemas/Customer'
         items:
-          type: [array, 'null']
+          type: array
+          minItems: 1
           maxItems: 100
           items:
             $ref: '#/components/schemas/ChargeItem'
           description: |
-            Opcional. Sem itens, montamos um a partir de `description`.
+            **Obrigatório.** O que está sendo vendido, discriminado. Pelo
+            menos um item, e a soma de `quantity * amount` de todos eles
+            precisa ser exatamente igual ao `amount` da cobrança.
+
+            Uma cobrança sem itens não diz o que foi comprado - e é esse
+            detalhamento que sustenta a sua defesa numa contestação.
+            Vendendo uma coisa só, mande um item único com o valor cheio.
 
     RefundChargeRequest:
       type: object
@@ -2295,7 +2285,7 @@ components:
           document: '111.***.***-35'
         pix:
           qr_code: 00020101021226840014br.gov.bcb.pix2562qrcodepix.example.com/v2/abcd1234
-          expires_at: '2026-08-05T14:00:00+00:00'
+          expires_at: '2026-08-04T15:00:00+00:00'
           end_to_end_id: null
         created_at: '2026-08-04T14:00:00+00:00'
         paid_at: null
@@ -2325,7 +2315,7 @@ components:
           document: '111.***.***-35'
         pix:
           qr_code: 00020101021226840014br.gov.bcb.pix2562qrcodepix.example.com/v2/abcd1234
-          expires_at: '2026-08-05T14:00:00+00:00'
+          expires_at: '2026-08-04T15:00:00+00:00'
           end_to_end_id: E12345678202608041200
         created_at: '2026-08-04T14:00:00+00:00'
         paid_at: '2026-08-04T14:03:11+00:00'
@@ -2496,6 +2486,8 @@ components:
                   details:
                     customer.name:
                       - O campo nome é obrigatório.
+                    items:
+                      - O campo itens é obrigatório.
             abaixoDoMinimo:
               summary: amount_below_minimum
               value:

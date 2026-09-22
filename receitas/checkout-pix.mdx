@@ -25,6 +25,9 @@ servidor; sem esse campo é o endereço **dele** que fica gravado, e o "Local" d
 o seu datacenter em toda cobrança. Se a sua aplicação fica atrás de CDN ou proxy, leia o IP do
 cabeçalho encaminhado, e não do socket — senão você envia o IP do proxy com a mesma confiança.
 
+`items` é obrigatório: mande o carrinho discriminado, e confira que a soma de `quantity * amount`
+bate com o `amount` que você enviou. É o detalhamento que sustenta a sua defesa numa contestação.
+
 <CodeGroup>
 
 ```php PHP
@@ -46,6 +49,12 @@ $resposta = Http::withToken(config('services.vext.key'))
             'phone_ddd' => $pedido->cliente->ddd,
             'phone_number' => $pedido->cliente->telefone,
         ],
+        'items' => $pedido->itens->map(fn ($item) => [   // obrigatório
+            'code' => $item->sku,
+            'description' => $item->nome,
+            'quantity' => $item->quantidade,
+            'amount' => $item->preco_unitario_em_centavos,
+        ])->all(),
     ]);
 
 $cobranca = $resposta->json();
@@ -77,6 +86,13 @@ const resposta = await fetch('https://api.usevext.com/v1/charges', {
       phone_ddd: pedido.cliente.ddd,
       phone_number: pedido.cliente.telefone,
     },
+    items: pedido.itens.map((item) => ({
+      // obrigatório
+      code: item.sku,
+      description: item.nome,
+      quantity: item.quantidade,
+      amount: item.precoUnitarioEmCentavos,
+    })),
   }),
 });
 
@@ -108,6 +124,15 @@ resposta = requests.post(
             "phone_ddd": pedido.cliente.ddd,
             "phone_number": pedido.cliente.telefone,
         },
+        "items": [  # obrigatório
+            {
+                "code": item.sku,
+                "description": item.nome,
+                "quantity": item.quantidade,
+                "amount": item.preco_unitario_em_centavos,
+            }
+            for item in pedido.itens
+        ],
     },
 )
 

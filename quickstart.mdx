@@ -25,6 +25,10 @@ confirmação chegando no seu servidor.
 Envie o valor em centavos e uma `Idempotency-Key` sua. `reference` é o seu número de pedido — é por
 ele que você reencontra a cobrança depois.
 
+`items` é obrigatório: discrimine o que está sendo vendido. Vendendo uma coisa só, mande um item
+único com o valor cheio — a soma de `quantity * amount` de todos os itens precisa bater exatamente
+com `amount`.
+
 <CodeGroup>
 
 ```bash cURL
@@ -43,7 +47,15 @@ curl -X POST https://api.usevext.com/v1/charges \
       "document_type": "CPF",
       "phone_ddd": "11",
       "phone_number": "987654321"
-    }
+    },
+    "items": [
+      {
+        "code": "curso-vue",
+        "description": "Curso de Vue 3",
+        "quantity": 1,
+        "amount": 10000
+      }
+    ]
   }'
 ```
 
@@ -61,6 +73,14 @@ $resposta = Http::withToken(config('services.vext.key'))
             'document_type' => 'CPF',
             'phone_ddd' => '11',
             'phone_number' => '987654321',
+        ],
+        'items' => [                         // obrigatório: a soma tem que bater com amount
+            [
+                'code' => 'curso-vue',
+                'description' => 'Curso de Vue 3',
+                'quantity' => 1,
+                'amount' => 10000,
+            ],
         ],
     ]);
 
@@ -87,6 +107,15 @@ const resposta = await fetch('https://api.usevext.com/v1/charges', {
       phone_ddd: '11',
       phone_number: '987654321',
     },
+    items: [
+      // obrigatório: a soma tem que bater com amount
+      {
+        code: 'curso-vue',
+        description: 'Curso de Vue 3',
+        quantity: 1,
+        amount: 10000,
+      },
+    ],
   }),
 });
 
@@ -112,6 +141,14 @@ resposta = requests.post(
             "phone_ddd": "11",
             "phone_number": "987654321",
         },
+        "items": [  # obrigatório: a soma tem que bater com amount
+            {
+                "code": "curso-vue",
+                "description": "Curso de Vue 3",
+                "quantity": 1,
+                "amount": 10000,
+            },
+        ],
     },
 )
 

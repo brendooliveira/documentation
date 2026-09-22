@@ -30,7 +30,10 @@ Isso significa que você nunca precisa se perguntar qual formato um campo espera
     "document": "11144477735",
     "phone_ddd": "11",
     "phone_number": "987654321"
-  }
+  },
+  "items": [
+    { "description": "Curso de Vue 3", "quantity": 1, "amount": 10000 }
+  ]
 }
 ```
 
@@ -123,9 +126,10 @@ camada de apresentação e mantenha o inteiro em todo o resto do sistema.
 ```
 
 <Note>
-  Enviar `items` não dispensa `amount`. A soma de `quantity * amount` de todos os itens precisa bater
-  exatamente com o `amount` da cobrança — sem essa conferência, o comprador veria um total diferente
-  da soma do que está levando.
+  `items` é obrigatório em `POST /v1/charges`, e não dispensa `amount`. A soma de `quantity * amount`
+  de todos os itens precisa bater exatamente com o `amount` da cobrança — sem essa conferência, o
+  comprador veria um total diferente da soma do que está levando. Vendendo uma coisa só, mande um
+  item único com o valor cheio.
 </Note>
 
 ## Veja também
