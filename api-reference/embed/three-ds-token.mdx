@@ -1,0 +1,19 @@
+---
+title: "Token da autenticação do portador"
+description: "Um token de uso único para o navegador conversar com o servidor 3DS."
+icon: "shield-check"
+openapi: "/api-reference/openapi.yaml POST /v1/embed/three_ds_token"
+---
+
+<Note>
+  Peça o token no envio do formulário, e não na abertura do quadro. Ele é de uso único e tem vida
+  curta: emitido cedo, morre enquanto o comprador digita o endereço de cobrança, e a autenticação
+  falha justo para quem demorou. O fluxo inteiro está em
+  [Autenticação do portador](/essenciais/autenticacao-do-portador).
+</Note>
+
+<Note>
+  Uma loja que não exige autenticação responde `404`. Não é descuido: dizer quais lojas autenticam é
+  dizer a quem testa cartão roubado por onde entrar. Quem monta a chamada é o `vext.js`, com a chave
+  publicável — ver [Referência do SDK](/embed/sdk).
+</Note>

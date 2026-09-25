@@ -52,6 +52,9 @@ etapa intermediária: a cobrança vai direto de `pending` para o desfecho.
 `in_analysis` não é um `paid` mais lento: a revisão pode terminar em recusa. O desfecho chega como
 `charge.paid` ou `charge.failed`, e é nele que você age.
 
+Uma recusa da operadora tem uma particularidade que vale guardar: ela responde `402` e **cria** a
+cobrança, já em `failed`. Ver [Cobrança no cartão](/essenciais/cartao).
+
 ## `partially_refunded` é estado próprio
 
 Uma venda devolvida pela metade fica `partially_refunded`, e não `refunded`.
@@ -102,6 +105,9 @@ As datas contam a história e vêm `null` até acontecerem: `created_at`, `paid_
 <CardGroup cols={2}>
   <Card title="Checkout PIX" icon="qr-code" href="/receitas/checkout-pix">
     O fluxo inteiro, da criação à liberação do produto.
+  </Card>
+  <Card title="Checkout no cartão" icon="credit-card" href="/receitas/checkout-cartao">
+    Onde `processing` e `in_analysis` aparecem na prática.
   </Card>
   <Card title="Estornos" icon="rotate-ccw" href="/essenciais/estornos">
     O que acontece depois de `paid`.

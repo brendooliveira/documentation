@@ -1,0 +1,108 @@
+---
+title: "Aparência"
+description: "Tema claro e escuro, cor de destaque, botão próprio e a altura que o quadro ajusta sozinho."
+icon: "palette"
+---
+
+import Suporte from "/snippets/suporte.mdx";
+
+O quadro se parece com a sua loja por três ajustes, e todos entram na montagem:
+
+```javascript
+const checkout = vext.checkout({
+  clientSecret: 'cs_..._secret_...',
+  theme: 'dark',
+  accentColor: '#0f9d58',
+  submitButton: false,
+});
+```
+
+São poucos de propósito. Cada propriedade de estilo que aceitássemos viraria CSS dentro de um
+documento que tem campo de cartão, e um valor como `red; } html { display: none` fecharia a conta
+para quem quisesse desenhar um campo falso por cima do nosso.
+
+## Tema
+
+<Frame caption="O mesmo checkout nos dois temas. A página da loja segue o mesmo sinal que o quadro.">
+  <img src="/images/embed/drop-in-escuro.png" alt="Quadro de pagamento no tema escuro, dentro de uma página de loja também escura" />
+</Frame>
+
+`theme` aceita `light`, `dark` e `auto`, e o padrão é `auto` — o quadro segue o
+`prefers-color-scheme` do sistema do comprador. Um valor que não seja um desses três vira `auto`
+sem erro.
+
+O tema viaja na URL do iframe, e não por mensagem depois que ele carrega. É o que garante que o
+primeiro quadro pintado já saia na cor certa: resolvido depois, o comprador veria um lampejo branco
+antes de escurecer.
+
+## Cor de destaque
+
+`accentColor` pinta o botão de pagar, o foco dos campos e a aba selecionada. Aceita hexadecimal de
+três ou seis dígitos, com ou sem `#`.
+
+A cor do **texto** sobre esse fundo nós calculamos, pela luminância da cor que você mandou. É o que
+evita o botão verde-limão com letra branca, ilegível, que sairia de um par fixo.
+
+Uma cor mal escrita é descartada e o quadro monta com a nossa. Um formulário que se recusasse a
+aparecer por causa de um `#` a mais trocaria um detalhe estético por uma venda perdida.
+
+## Botão próprio
+
+`submitButton: false` esconde o nosso botão e passa o disparo para você, via
+[`confirm()`](/embed/sdk#métodos-do-elemento). O padrão é mostrar, então omitir a opção nunca tira
+nada da tela.
+
+Ligue o seu botão ao evento `change`:
+
+```javascript
+checkout.on('change', ({ complete }) => {
+  botao.disabled = !complete;
+});
+```
+
+## Altura
+
+O quadro mede o próprio conteúdo e avisa a sua página a cada mudança — trocar de aba, abrir a lista
+de parcelas ou exibir um erro de campo ajusta a altura na hora. Você não precisa reservar espaço nem
+programar nada.
+
+Se o quadro não conseguir carregar, ele assume uma altura mínima depois de um instante em vez de
+ficar em zero. Uma página de erro invisível é o pior desfecho possível: a venda não acontece e
+ninguém descobre por quê.
+
+<Note>
+  Reserve largura, não altura. O iframe ocupa `100%` da largura do contêiner onde você montou, e
+  um contêiner estreito espreme os campos de validade e CVV lado a lado.
+</Note>
+
+## A tela do desafio
+
+Quando o banco pede a senha do portador, o quadro cresce e cobre a página, com um fundo escurecido
+atrás. Ao terminar, ele volta exatamente à altura que tinha.
+
+A expansão acontece **no mesmo iframe**, e não numa janela nova. O número do cartão vive ali dentro
+e não pode ser repassado para outro documento; abrir um popup também esbarraria no bloqueador do
+navegador bem no meio do pagamento. Enquanto o desafio está aberto, os ajustes de altura ficam
+suspensos.
+
+## O que não dá para mudar
+
+- **O idioma.** O quadro é em português do Brasil, com CPF, CNPJ, DDD e centavos de real. Não há
+  opção de locale.
+- **A tipografia e o espaçamento.** Herdar a fonte da página exigiria carregar CSS de fora no
+  documento do cartão.
+- **A ordem e o rótulo dos campos.** O agrupamento segue o que o preenchimento automático do Chrome
+  e do Safari reconhece; mexer nisso quebra o autofill do comprador.
+
+## Veja também
+
+<CardGroup cols={2}>
+  <Card title="Referência do SDK" icon="braces" href="/embed/sdk">
+    Onde as três opções entram e o que cada método faz.
+  </Card>
+  <Card title="Autenticação do portador" icon="shield-check" href="/essenciais/autenticacao-do-portador">
+    Quando o desafio aparece e o que ele muda numa contestação.
+  </Card>
+</CardGroup>
+
+<Suporte />

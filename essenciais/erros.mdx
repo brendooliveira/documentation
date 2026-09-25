@@ -1,6 +1,6 @@
 ---
 title: "Erros"
-description: "Um envelope único, sete famílias de tipo e o catálogo estável de códigos."
+description: "Um envelope único, oito famílias de tipo e o catálogo estável de códigos."
 icon: "triangle-alert"
 ---
 
@@ -26,7 +26,7 @@ Todo erro — inclusive os que não previmos — tem a mesma forma:
   que compara a mensagem para de funcionar sem avisar.
 </Warning>
 
-## As sete famílias
+## As oito famílias
 
 O `type` responde de quem é o problema e o que fazer. É por ele que você decide o comportamento;
 o `code` diz qual mensagem mostrar.
@@ -39,10 +39,17 @@ o `code` diz qual mensagem mostrar.
 | `idempotency_error` | Sua chave de idempotência | Chave nova, ou repita em instantes |
 | `not_found_error` | O recurso | Confira o código. Não repita |
 | `rate_limit_error` | Ritmo | Espere o `Retry-After` e repita |
+| `card_error` | O cartão do comprador | Mostre a `message` e ofereça outro meio. Não repita |
 | `api_error` | **Nosso** | Repita com a mesma `Idempotency-Key`. Não reescreva a chamada |
 
 A divisão que importa na prática: `invalid_request_error` se corrige mudando a chamada,
 `authentication_error` trocando a chave, e `api_error` é nosso — repita, não reescreva.
+
+`card_error` é o único que descreve uma **cobrança que existe**. Os outros sete recusam a chamada
+antes de criar qualquer coisa; um `402 card_declined` devolve em `details.charge_id` o `ch_` de uma
+cobrança já gravada com status `failed`. Tratá-lo como os demais e descartar a resposta deixa você
+sem a tentativa que o comprador jura ter feito. Ver
+[Cobrança no cartão](/essenciais/cartao#ao-contrário-do-pix-uma-recusa-cria-cobrança).
 
 ## `details`
 
@@ -71,6 +78,10 @@ Todos são estáveis. Se um código novo aparecer, ele entra nesta tabela — ne
 significado.
 
 <TabelaErros />
+
+Os erros que só aparecem no navegador — chave publicável ausente, revogada ou fora dos domínios
+autorizados — estão em [Chave publicável](/embed/chave-publicavel#os-erros-que-você-vai-ver). Eles
+nunca chegam a uma chamada feita com `sk_`.
 
 ## Tratando na prática
 

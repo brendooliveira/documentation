@@ -50,8 +50,24 @@
               "essenciais/erros",
               "essenciais/limites-de-taxa",
               "essenciais/ciclo-de-vida-da-cobranca",
+              "essenciais/cartao",
+              "essenciais/autenticacao-do-portador",
+              "essenciais/cofre-de-cartoes",
               "essenciais/estornos",
               "essenciais/saldo"
+            ]
+          },
+          {
+            "group": "Embed no navegador",
+            "icon": "credit-card",
+            "pages": [
+              "embed/visao-geral",
+              "embed/chave-publicavel",
+              "embed/drop-in",
+              "embed/elements",
+              "embed/vext-link",
+              "embed/aparencia",
+              "embed/sdk"
             ]
           },
           {
@@ -68,6 +84,7 @@
             "icon": "route",
             "pages": [
               "receitas/checkout-pix",
+              "receitas/checkout-cartao",
               "receitas/conciliacao",
               "receitas/repetir-com-seguranca",
               "receitas/estorno-parcial"
@@ -88,7 +105,36 @@
               "api-reference/cobrancas/criar",
               "api-reference/cobrancas/listar",
               "api-reference/cobrancas/consultar",
-              "api-reference/cobrancas/estornar"
+              "api-reference/cobrancas/estornar",
+              "api-reference/cobrancas/parcelas"
+            ]
+          },
+          {
+            "group": "Checkout",
+            "pages": [
+              "api-reference/checkout/criar",
+              "api-reference/checkout/consultar",
+              "api-reference/checkout/encerrar"
+            ]
+          },
+          {
+            "group": "Cartões",
+            "pages": [
+              "api-reference/cartoes/listar",
+              "api-reference/cartoes/consultar",
+              "api-reference/cartoes/remover"
+            ]
+          },
+          {
+            "group": "Embed (navegador)",
+            "pages": [
+              "api-reference/embed/script",
+              "api-reference/embed/elements",
+              "api-reference/embed/sessao",
+              "api-reference/embed/confirmar",
+              "api-reference/embed/status",
+              "api-reference/embed/three-ds-token",
+              "api-reference/embed/link"
             ]
           },
           {

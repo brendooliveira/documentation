@@ -1,0 +1,124 @@
+---
+title: "Embed no navegador"
+sidebarTitle: "Visão geral"
+description: "Cobrar no cartão sem que o número passe pelo seu servidor. O que o embed faz, as duas formas de montá-lo e o que escolher."
+icon: "credit-card"
+---
+
+import Suporte from "/snippets/suporte.mdx";
+
+O embed é um formulário de pagamento que roda dentro de um iframe nosso, na sua página. O comprador
+digita o cartão ali e o número nunca toca o seu código — o que chega até você é um `ch_` de uma
+cobrança que já nasceu autorizada.
+
+Isso muda o seu escopo de PCI DSS: sem PAN transitando pelo seu servidor, a lista do que você
+precisa provar encolhe para o SAQ A. Um formulário próprio que posta o número para o seu backend
+coloca toda a sua infraestrutura dentro do escopo, inclusive os logs.
+
+<Frame caption="O Drop-in montado numa página de checkout, tema claro.">
+  <img src="/images/embed/drop-in-claro.png" alt="Formulário de pagamento da Vext com abas de cartão e Pix, campos preenchidos, seletor de parcelas e botão de pagar" />
+</Frame>
+
+## As duas formas
+
+Você monta o embed de um jeito ou do outro. A diferença é quem cria a cobrança.
+
+<CardGroup cols={2}>
+  <Card title="Drop-in" icon="layout-panel-top" href="/embed/drop-in">
+    O checkout inteiro dentro do quadro: cartão, Pix, parcelas, endereço e o botão. Você abre uma
+    sessão no seu servidor e o embed cobra sozinho.
+  </Card>
+  <Card title="Elements" icon="rectangle-ellipsis" href="/embed/elements">
+    Só os campos do cartão. O quadro devolve um token, e a cobrança quem cria é você, com a
+    `sk_live_`, no seu servidor.
+  </Card>
+</CardGroup>
+
+| | Drop-in | Elements |
+| --- | --- | --- |
+| Quem cria a cobrança | Nós, no `confirm` da sessão | Você, em `POST /v1/charges` |
+| O que o navegador recebe | A cobrança pronta | Um `token` de cartão |
+| Pix na mesma tela | Sim | Não |
+| Parcelas, endereço e 3DS | Prontos | Você monta |
+| Cofre de cartões e [Vext Link](/embed/vext-link) | Sim | Não |
+| Precisa de sessão de checkout | Sim | Não |
+
+Comece pelo **Drop-in**. Ele é a única forma que traz Pix, parcelamento, 3DS e o cofre de cartões
+sem código seu, e é onde o pagamento de um toque existe. Vá para o Elements quando o layout da sua
+página exigir os campos soltos no meio do seu próprio formulário.
+
+<Frame caption="No Elements, os campos do cartão entram no meio do formulário da loja.">
+  <img src="/images/embed/elements.png" alt="Formulário da loja com nome e e-mail próprios e, abaixo, os campos de cartão da Vext" />
+</Frame>
+
+## O que você precisa antes
+
+<Steps>
+
+<Step title="Uma chave publicável">
+
+Ela é criada em **Desenvolvedores**, ao lado da secreta, e o prefixo é `pk_live_` ou `pk_test_`.
+Diferente da secreta, esta nasce para ficar em texto puro no HTML.
+
+</Step>
+
+<Step title="Os domínios onde o embed pode aparecer">
+
+Uma chave publicável recém-criada não monta em lugar nenhum: a lista de domínios autorizados começa
+vazia e um domínio de fora recebe `403 origin_not_allowed`. Cadastre o domínio da sua loja antes de
+testar, ou o quadro não renderiza e o console não diz muita coisa.
+
+Ver [Chave publicável](/embed/chave-publicavel).
+
+</Step>
+
+<Step title="O script">
+
+Um arquivo, uma URL fixa, sem build:
+
+```html
+<script src="https://api.usevext.com/v1/vext.js"></script>
+```
+
+Não copie o arquivo para o seu servidor. Ele é servido com `Cache-Control: public, max-age=300`
+justamente para que uma correção nossa chegue em minutos — uma cópia congelada no seu bundle fica
+com o bug até o seu próximo deploy.
+
+</Step>
+
+</Steps>
+
+## O que nunca sai do quadro
+
+O número do cartão, a validade e o CVV existem só dentro do iframe, servido pelo nosso domínio. A
+separação é o produto:
+
+- O seu JavaScript **não tem acesso** ao conteúdo dos campos. Mesma origem é o que o navegador exige
+  para ler um iframe, e a origem ali é nossa.
+- A comunicação entre a sua página e o quadro é `postMessage`, com origem e `source` conferidos dos
+  dois lados. Nada de `'*'`.
+- O que atravessa é o que você vê nos [eventos](/embed/sdk#eventos): bandeira, quatro últimos
+  dígitos, se o formulário está completo. Nunca o PAN.
+
+Por isso os quatro campos do cartão vivem num iframe só, e não um por campo: o preenchimento
+automático do Chrome e do Safari trata `cc-number`, `cc-exp` e `cc-csc` como um grupo, e só preenche
+dentro de um mesmo documento.
+
+## Veja também
+
+<CardGroup cols={2}>
+  <Card title="Referência do SDK" icon="braces" href="/embed/sdk">
+    `Vext()`, os métodos do elemento e os cinco eventos.
+  </Card>
+  <Card title="Aparência" icon="palette" href="/embed/aparencia">
+    Tema, cor de destaque, botão próprio e a altura que se ajusta sozinha.
+  </Card>
+  <Card title="Vext Link" icon="zap" href="/embed/vext-link">
+    O comprador reconhecido paga com o cartão que já deixou guardado.
+  </Card>
+  <Card title="Checkout no cartão" icon="route" href="/receitas/checkout-cartao">
+    O fluxo completo, do pedido ao `charge.paid`.
+  </Card>
+</CardGroup>
+
+<Suporte />

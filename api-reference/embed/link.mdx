@@ -1,0 +1,27 @@
+---
+title: "Vext Link"
+description: "Reconhece o comprador pelo e-mail e devolve os cartões que ele já deixou guardados."
+icon: "zap"
+openapi: "/api-reference/openapi.yaml POST /v1/embed/sessions/{code}/link/lookup"
+---
+
+<Note>
+  O Link encurta a segunda compra: o comprador digita o e-mail, confirma um código de seis dígitos e
+  paga com um toque. Quem faz estas chamadas é o `vext.js`, com a chave publicável e o
+  `X-Vext-Client-Secret` da sessão. O fluxo na tela está em [Vext Link](/embed/vext-link).
+</Note>
+
+São seis operações sobre a mesma sessão:
+
+- `POST /v1/embed/sessions/{code}/link/lookup` — o e-mail digitado; havendo cartão guardado, um código de seis dígitos sai por e-mail.
+- `POST /v1/embed/sessions/{code}/link/code` — reenvia o código, e o anterior deixa de valer.
+- `POST /v1/embed/sessions/{code}/link/verify` — confere os seis dígitos e marca **esta** sessão como verificada.
+- `GET /v1/embed/sessions/{code}/link/cards` — os cartões de quem confirmou o código, única porta para essa lista.
+- `DELETE /v1/embed/sessions/{code}/link/cards/{card}` — o comprador remove o próprio cartão; revoga, não apaga.
+- `DELETE /v1/embed/sessions/{code}/link` — "não sou eu": derruba o reconhecimento e apaga o cookie do aparelho.
+
+<Note>
+  A resposta da consulta é idêntica quando conhecemos o e-mail e quando não conhecemos, e a máscara
+  devolvida vem do que foi digitado. Assim, quem chega com uma lista de e-mails vazados não descobre
+  por aqui quais deles compram onde.
+</Note>

@@ -1,0 +1,19 @@
+---
+title: "Grade de parcelas"
+description: "A tabela de parcelamento para um valor, calculada pelo mesmo código que roda no checkout."
+icon: "table"
+openapi: "/api-reference/openapi.yaml GET /v1/installments"
+---
+
+<Note>
+  Esta é a grade do lado do **seu servidor**, e ela diz `unavailable_reason` — o porquê de não haver
+  parcelamento. A gêmea do navegador, `GET /v1/embed/installments`, guarda esse campo de propósito:
+  quem a chama é a página de um comprador, e nomear qual chave nossa está desligada viraria um painel
+  de status público.
+</Note>
+
+<Note>
+  A grade vem bandeira por bandeira porque a bandeira só é conhecida quando o comprador digita os
+  seis primeiros dígitos. Mostre a chave `default` antes disso — ela é o pior caso, então o preço
+  nunca sobe depois. Ver [Cobrança no cartão](/essenciais/cartao).
+</Note>

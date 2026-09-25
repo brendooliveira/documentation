@@ -44,9 +44,21 @@ vazou não deveria conseguir criar cobrança nem estornar.
 | Escopo | Libera |
 | --- | --- |
 | `charges:write` | `POST /v1/charges` |
-| `charges:read` | `GET /v1/charges` e `GET /v1/charges/{code}` |
+| `charges:read` | `GET /v1/charges`, `GET /v1/charges/{code}` e `GET /v1/installments` |
 | `refunds:write` | `POST /v1/charges/{code}/refund` |
 | `balance:read` | `GET /v1/balance` |
+| `checkout:write` | As três operações de `/v1/checkout_sessions` |
+| `cards:manage` | As três operações de `/v1/cards` |
+
+## A chave publicável é outra credencial
+
+O [embed no navegador](/embed/visao-geral) usa uma chave própria, a publicável, no header
+`X-Vext-Publishable-Key`. Ela nasce para ficar em texto puro no HTML, e por isso não carrega escopo
+nenhum: o que ela alcança é o grupo fechado `/v1/embed`, e nenhum outro endpoint desta API aceita
+uma `pk_`.
+
+O que a protege é a lista de domínios onde pode ser usada. Ver
+[Chave publicável](/embed/chave-publicavel).
 
 ## 401 e 403 respondem coisas diferentes
 

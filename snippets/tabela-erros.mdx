@@ -5,7 +5,11 @@
 | `revoked_api_key` | 401 | `authentication_error` | A chave existiu e foi desligada. Gere outra em **Desenvolvedores** |
 | `expired_api_key` | 401 | `authentication_error` | Gere outra em **Desenvolvedores** |
 | `insufficient_scope` | 403 | `permission_error` | A chave é válida, falta o escopo. `details.required_ability` diz qual |
+| `one_click_requires_three_ds` | 403 | `permission_error` | A loja exige [autenticação do portador](/essenciais/autenticacao-do-portador), que não convive com cartão guardado |
 | `resource_not_found` | 404 | `not_found_error` | O recurso não existe — ou é de outra conta |
+| `card_not_found` | 404 | `not_found_error` | O `pm_` não existe, ou é de outro comprador |
+| `card_declined` | 402 | `card_error` | A operadora recusou. **A cobrança existe**, em `details.charge_id`, com status `failed` |
+| `pix_failed` | 402 | `api_error` | Não conseguimos gerar o código Pix. Ofereça o cartão, ou tente de novo |
 | `idempotency_key_too_long` | 400 | `invalid_request_error` | Encurte a chave para 255 caracteres |
 | `idempotency_key_reused` | 409 | `idempotency_error` | A chave já foi usada com outro corpo. Use uma chave nova |
 | `idempotency_key_in_progress` | 409 | `idempotency_error` | A primeira ainda está em voo. Repita em instantes |
@@ -15,6 +19,9 @@
 | `items_do_not_match_amount` | 422 | `invalid_request_error` | A soma de `quantity * amount` dos itens tem que bater com `amount` |
 | `seller_not_approved` | 422 | `invalid_request_error` | Nada na chamada resolve. O caminho é o painel |
 | `provider_rejected` | 422 | `invalid_request_error` | Confira os dados do comprador e o valor |
+| `card_expired` | 422 | `invalid_request_error` | O cartão guardado venceu. Peça um novo ao comprador |
+| `card_revoked` | 422 | `invalid_request_error` | O cartão guardado foi removido, por você ou pelo comprador |
+| `card_not_usable_on_account` | 422 | `invalid_request_error` | O cartão não vale na conta que está cobrando. Ver [Cofre de cartões](/essenciais/cofre-de-cartoes) |
 | `charge_not_refundable` | 422 | `invalid_request_error` | Só cobrança paga é estornável |
 | `exceeds_remaining` | 422 | `invalid_request_error` | Peça no máximo o saldo estornável, ou omita `amount` |
 | `refund_window_closed` | 422 | `invalid_request_error` | Passaram-se 90 dias desde o pagamento. Não há retentativa |

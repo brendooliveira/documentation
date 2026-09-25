@@ -1,0 +1,138 @@
+---
+title: "Cobrança no cartão"
+description: "Como uma venda no cartão difere de um PIX: parcelas, juros, a recusa que cria cobrança e o objeto card na resposta."
+icon: "credit-card"
+---
+
+import AvisoCentavos from "/snippets/aviso-centavos.mdx";
+import Suporte from "/snippets/suporte.mdx";
+
+Uma cobrança no cartão nasce de `POST /v1/charges` com `payment_method: "credit_card"` e um objeto
+`card`. O restante da chamada é igual ao PIX — mesmos `amount`, `items`, `customer` e
+`Idempotency-Key`.
+
+<AvisoCentavos />
+
+## A regra
+
+O número do cartão não entra nessa chamada. O que entra é um `token` de uso único, produzido no
+navegador pelo [embed](/embed/visao-geral), ou o `id` de um
+[cartão guardado](/essenciais/cofre-de-cartoes).
+
+```json Cobrança de R$ 100,00 em 3x
+{
+  "amount": 10000,
+  "payment_method": "credit_card",
+  "description": "Pedido 1042",
+  "reference": "pedido-1042",
+  "customer_ip": "203.0.113.7",
+  "items": [{ "description": "Curso completo", "quantity": 1, "amount": 10000 }],
+  "card": {
+    "token": "token_...",
+    "installments": 3,
+    "holder_name": "ANA P SOUZA",
+    "billing_address": {
+      "zip_code": "01310100",
+      "street": "Avenida Paulista",
+      "number": "1000",
+      "neighborhood": "Bela Vista",
+      "city": "São Paulo",
+      "state": "SP"
+    }
+  }
+}
+```
+
+Mandar `card` numa cobrança PIX volta `422`, e omiti-lo numa de cartão também. A dupla
+`payment_method` + `card` anda junta.
+
+## Ao contrário do PIX, uma recusa cria cobrança
+
+Esta é a distinção que mais gera chamado. Um `422` significa que **nada foi criado** — o corpo não
+passou na validação. Um `402 card_declined` significa que a cobrança **existe**, com status
+`failed`, e o seu `ch_` está em `error.details.charge_id`.
+
+```json 402
+{
+  "error": {
+    "type": "card_error",
+    "code": "card_declined",
+    "message": "A operadora recusou o pagamento.",
+    "details": { "charge_id": "ch_01k1y6r6m6q2x0p3d9v4t7c8n2", "decline_code": "51" }
+  }
+}
+```
+
+Grave esse `ch_` junto do pedido. Ele aparece em `GET /v1/charges`, conta na sua taxa de aprovação e
+é por ele que o suporte encontra a tentativa — jogar a resposta fora deixa você sem nada para
+mostrar quando o comprador jurar que tentou pagar.
+
+A `message` é nossa e é a que você pode mostrar ao comprador. O `decline_code` é da operadora, e
+serve para o seu time entender o padrão das recusas, não para virar texto na tela.
+
+## Parcelas e juros
+
+`installments` é obrigatório. Mesmo à vista, mande `1` — deixá-lo de fora não vira um padrão
+implícito, volta `422`.
+
+A grade de parcelas não é fixa: ela muda por bandeira e por valor, e quem a calcula somos nós.
+Consulte-a em [`GET /v1/installments`](/api-reference/cobrancas/parcelas) e mostre ao comprador os
+valores que vieram de lá.
+
+<Frame caption="A grade como o embed a apresenta, com o total e os juros escritos por extenso.">
+  <img src="/images/embed/parcelas.png" alt="Lista de parcelamento de 1x a 12x, com o valor de cada parcela e a indicação de juros" />
+</Frame>
+
+O juro, quando houver, é cobrado **do comprador** e soma ao total. Ele volta em `card.interest`, em
+centavos, e o `amount` da cobrança continua sendo o preço do seu produto — é o que faz a sua
+conciliação fechar sem descobrir a diferença no fim do mês.
+
+## O que a resposta traz
+
+Toda cobrança tem o objeto `card`. Numa cobrança PIX ele vem com os membros nulos, o que evita que o
+seu código precise checar a existência do objeto antes de ler um campo.
+
+Numa venda no cartão ele traz bandeira, quatro últimos dígitos, titular, parcelas, juros, o
+resultado da [autenticação do portador](/essenciais/autenticacao-do-portador) e o `authorized_at`.
+
+<Note>
+  `authorized_at` não é `paid_at`. A autorização reserva o limite no cartão; a captura é o que
+  move o dinheiro. Quem confirma a venda para o seu sistema continua sendo o webhook
+  [`charge.paid`](/api-reference/webhooks/charge-paid).
+</Note>
+
+## O que dá errado
+
+| `code` | HTTP | O sintoma |
+| --- | --- | --- |
+| `card_declined` | `402` | A operadora recusou. A cobrança existe, com status `failed` |
+| `validation_failed` | `422` | Falta `installments`, ou `card` veio numa cobrança PIX |
+| `one_click_requires_three_ds` | `403` | Cartão guardado numa loja que exige autenticação do portador |
+| `card_not_found` | `404` | O `pm_` não é do comprador daquela sessão |
+| `card_expired` | `422` | O cartão guardado venceu |
+| `card_revoked` | `422` | O cartão guardado foi removido |
+| `card_not_usable_on_account` | `422` | O cartão guardado não vale na conta que está cobrando |
+
+Uma venda no cartão também pode entrar em `in_analysis` antes de decidir. Ela não está paga nem
+recusada: a análise de fraude segurou o pagamento e o desfecho chega por
+[`charge.in_analysis`](/api-reference/webhooks/charge-in-analysis) e depois por `charge.paid` ou
+`charge.failed`. Ver [Ciclo de vida](/essenciais/ciclo-de-vida-da-cobranca).
+
+## Veja também
+
+<CardGroup cols={2}>
+  <Card title="Embed no navegador" icon="credit-card" href="/embed/visao-geral">
+    Cobrar sem que o número do cartão passe pelo seu servidor.
+  </Card>
+  <Card title="Autenticação do portador" icon="shield-check" href="/essenciais/autenticacao-do-portador">
+    Quando o 3DS entra e o que ele muda numa contestação.
+  </Card>
+  <Card title="Cofre de cartões" icon="vault" href="/essenciais/cofre-de-cartoes">
+    Cobrar de novo sem pedir nada ao comprador.
+  </Card>
+  <Card title="Ciclo de vida" icon="workflow" href="/essenciais/ciclo-de-vida-da-cobranca">
+    Os dez estados, incluindo `in_analysis` e `chargedback`.
+  </Card>
+</CardGroup>
+
+<Suporte />

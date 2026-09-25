@@ -1,0 +1,17 @@
+---
+title: "Consultar sessão"
+description: "Lê uma sessão de checkout pelo código cs_…, na visão do seu servidor."
+icon: "file-search"
+openapi: "/api-reference/openapi.yaml GET /v1/checkout_sessions/{code}"
+---
+
+<Note>
+  `charge_id` é o que liga o carrinho à venda: com ele você vai da sessão à cobrança e ao webhook
+  sem guardar nada além do `cs_` no seu pedido. Enquanto ninguém confirmou, ele vem `null` — e
+  `null` aqui é "ainda não cobraram", não "falhou".
+</Note>
+
+<Note>
+  O `client_secret` não está nesta resposta, e nunca estará: ele existe uma vez só, na abertura da
+  sessão. Quem o perdeu abre uma sessão nova. Ver [Chave publicável](/embed/chave-publicavel).
+</Note>

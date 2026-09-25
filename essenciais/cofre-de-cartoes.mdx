@@ -1,0 +1,104 @@
+---
+title: "Cofre de cartões"
+description: "Cobrar de novo sem pedir nada ao comprador. Como um cartão entra no cofre, como usá-lo e por que remover não apaga."
+icon: "vault"
+---
+
+import Suporte from "/snippets/suporte.mdx";
+
+Um cartão guardado deixa a segunda compra acontecer num toque. Você cobra citando um código `pm_`, e
+o comprador não redigita número, validade nem CVV.
+
+## Como um cartão entra
+
+Só de um jeito: como efeito de uma **venda aprovada** em que alguém pediu para guardar.
+
+```json Ao abrir a sessão, ou ao criar a cobrança
+{ "amount": 10000, "save_card": true }
+```
+
+Não existe `POST /v1/cards`, e isso é escolha de projeto. Um endpoint para cadastrar cartão sem
+cobrar seria um jeito confortável de testar números roubados em série — e a cobrança aprovada é a
+prova de que aquele cartão era mesmo do comprador.
+
+Uma cobrança recusada não guarda nada. Se o cofre falhar por qualquer motivo, a venda segue
+aprovada: guardar um cartão nunca pode derrubar um pagamento que já deu certo.
+
+O comprador também pode pedir, marcando a caixa no [embed](/embed/vext-link). Ela é oferecida
+quando você **não** mandou `save_card` na sessão — com os dois, a caixa seria decorativa, e um
+controle que não muda nada é pior do que nenhum.
+
+## Como cobrar com ele
+
+Em `POST /v1/charges`, troque o `token` pelo `id`:
+
+```json
+{
+  "amount": 10000,
+  "payment_method": "credit_card",
+  "items": [{ "description": "Curso completo", "quantity": 1, "amount": 10000 }],
+  "card": { "id": "pm_01k1y6r6m6q2x0p3d9v4t7c8n2", "installments": 1 }
+}
+```
+
+No embed, o caminho é abrir a sessão com `card_id` — o quadro nasce com o cartão escolhido e sem
+campos para preencher. Ver [Vext Link](/embed/vext-link).
+
+`card_id` e `save_card` não convivem na mesma sessão: um cartão que já está no cofre não entra nele
+de novo.
+
+## Consultar e remover
+
+Os três endpoints pedem o escopo `cards:manage`:
+
+| Operação | Endpoint |
+| --- | --- |
+| [Listar](/api-reference/cartoes/listar) | `GET /v1/cards` |
+| [Consultar](/api-reference/cartoes/consultar) | `GET /v1/cards/{code}` |
+| [Remover](/api-reference/cartoes/remover) | `DELETE /v1/cards/{code}` |
+
+A listagem filtra por `customer_document`, que é como você encontra os cartões de um comprador
+específico. Cartões vencidos ficam de fora por padrão; `include_expired=true` os traz de volta.
+
+**Remover revoga, não apaga.** O cartão deixa de poder ser cobrado na hora, e o registro continua
+existindo — é o que permite responder "com que cartão foi aquela cobrança de março" um ano depois.
+Apagar a linha deixaria a sua conciliação com um buraco justamente nas vendas que alguém contestou.
+
+O comprador também remove os próprios cartões, dentro do quadro, sem passar por você.
+
+<Note>
+  `last_four` e `brand` são para exibir, nunca para reconhecer. Dois cartões do mesmo comprador
+  podem terminar nos mesmos quatro dígitos, e a bandeira que precifica a parcela é detectada pelo
+  BIN antes da autorização. O que identifica um cartão é o `pm_`.
+</Note>
+
+## O que dá errado
+
+| `code` | HTTP | O sintoma |
+| --- | --- | --- |
+| `card_not_found` | `404` | O `pm_` não existe, ou é de outra conta |
+| `card_expired` | `422` | A validade passou |
+| `card_revoked` | `422` | O cartão foi removido, por você ou pelo comprador |
+| `card_not_usable_on_account` | `422` | O cartão não vale na conta que está cobrando |
+| `one_click_requires_three_ds` | `403` | A loja exige [autenticação do portador](/essenciais/autenticacao-do-portador) |
+| `insufficient_scope` | `403` | A chave não tem `cards:manage` |
+
+<Warning>
+  A referência guardada pertence à conta do adquirente que a criou. Trocar a conta da sua loja
+  invalida todos os cartões do cofre de uma vez, e as recompras passam a ser recusadas com uma
+  mensagem genérica da operadora — que se parece com cartão sem limite. Antes de trocar de conta,
+  conte com os compradores tendo de digitar o cartão outra vez.
+</Warning>
+
+## Veja também
+
+<CardGroup cols={2}>
+  <Card title="Vext Link" icon="zap" href="/embed/vext-link">
+    O comprador reconhecido escolhendo um cartão do cofre.
+  </Card>
+  <Card title="Cobrança no cartão" icon="credit-card" href="/essenciais/cartao">
+    Parcelas, juros e o objeto `card` da resposta.
+  </Card>
+</CardGroup>
+
+<Suporte />

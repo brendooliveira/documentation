@@ -1,0 +1,21 @@
+---
+title: "Documento do iframe"
+description: "A página que roda dentro do quadro, montada pelo vext.js com a chave e a origem na URL."
+icon: "frame"
+openapi: "/api-reference/openapi.yaml GET /v1/embed/elements"
+---
+
+<Note>
+  Quem monta esta URL é o `vext.js`, a partir das opções que você passa a `Vext(pk).checkout(…)` ou
+  `Vext(pk).elements(…)`. Ela está documentada para quem abre o painel de rede e quer entender o que
+  o quadro carrega. Para integrar, comece por [Elements](/embed/elements) e
+  [Aparência](/embed/aparencia).
+</Note>
+
+<Warning>
+  Um quadro que carrega em branco, sem erro nenhum no console, quase sempre é **domínio não
+  cadastrado**: quem bloqueia é o `frame-ancestors` desta resposta, aplicado pelo navegador, e não
+  uma conferência nossa. Cadastre a origem da loja nos domínios autorizados da chave em
+  [Chave publicável](/embed/chave-publicavel) — sem isso, o checkout não aparece para nenhum
+  comprador.
+</Warning>

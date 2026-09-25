@@ -1,0 +1,20 @@
+---
+title: "Listar cartões guardados"
+description: "Os cartões que os seus compradores deixaram no cofre, com bandeira, final e validade."
+icon: "credit-card"
+openapi: "/api-reference/openapi.yaml GET /v1/cards"
+---
+
+<Note>
+  O `pm_` é a única referência ao cartão que sai da nossa casa, e é com ele que você cobra de novo —
+  num upsell, numa recorrência. Filtrar por `customer_document` poupa você de guardar mais um
+  identificador nosso ao lado do cadastro do comprador. Ver
+  [Cofre de cartões](/essenciais/cofre-de-cartoes).
+</Note>
+
+<Note>
+  Um cartão entra no cofre como efeito de uma venda aprovada com `save_card` — e é por isso que não
+  existe `POST /v1/cards`. Cartão guardado é cartão que já passou por um emissor, e essa regra é o
+  que sustenta o pagamento de um clique. Como pedir a guarda está em
+  [Cobrança no cartão](/essenciais/cartao).
+</Note>

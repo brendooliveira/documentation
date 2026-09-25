@@ -1,0 +1,208 @@
+---
+title: "Referência do SDK"
+sidebarTitle: "Referência do SDK"
+description: "O global Vext, os métodos do elemento, os cinco eventos e os códigos de erro que o quadro emite."
+icon: "braces"
+---
+
+import Suporte from "/snippets/suporte.mdx";
+
+Tudo que o `vext.js` expõe cabe numa página. São duas fábricas, seis métodos e cinco eventos.
+
+```html
+<script src="https://api.usevext.com/v1/vext.js"></script>
+```
+
+O script define um único global, `Vext`, e ele é uma **função**, não um objeto com namespace.
+
+## `Vext(publishableKey)`
+
+```javascript
+const vext = Vext('pk_live_...');
+```
+
+Lança `VextError` na hora se o argumento não começar com `pk_`. Passar uma `sk_` tem mensagem
+própria, porque é o engano que custa caro: a chave secreta não vai para o navegador.
+
+Devolve um objeto com exatamente dois métodos.
+
+<ParamField path="elements(appearance?)" type="function">
+  Devolve uma fábrica com `create(type)`. O único tipo é `'card'`; qualquer outro lança
+  `unknown_element`. Use para o [Elements](/embed/elements).
+</ParamField>
+
+<ParamField path="checkout(options)" type="function">
+  Devolve o elemento do [Drop-in](/embed/drop-in) já configurado. Exige `clientSecret` começando com
+  `cs_`, senão lança `invalid_client_secret`.
+</ParamField>
+
+## Opções de aparência
+
+Valem para os dois modos. Todas são opcionais, e omitir qualquer uma nunca remove funcionalidade.
+
+<ParamField path="theme" type="'light' | 'dark' | 'auto'" default="auto">
+  `auto` segue o `prefers-color-scheme` do comprador. Um valor desconhecido vira `auto` em silêncio.
+</ParamField>
+
+<ParamField path="accentColor" type="string">
+  Hexadecimal, de três ou seis dígitos, com ou sem `#`. Uma cor mal escrita é ignorada e o quadro
+  monta com a nossa — recusar a montagem trocaria um detalhe estético por uma venda perdida.
+</ParamField>
+
+<ParamField path="submitButton" type="boolean" default="true">
+  `false` esconde o nosso botão. Você desenha o seu e chama `confirm()`.
+</ParamField>
+
+<ParamField path="clientSecret" type="string" required>
+  Só em `checkout()`. O `cs_..._secret_...` devolvido por `POST /v1/checkout_sessions`.
+</ParamField>
+
+Não existe um objeto de estilos livre, do tipo `appearance: { input: { border: ... } }`. Cada
+propriedade aceita ali viraria CSS dentro de um documento que tem campo de cartão, e é por essa
+fresta que um script injetado desenharia um campo falso por cima do nosso. Ver
+[Aparência](/embed/aparencia) para o que dá para mudar.
+
+## Métodos do elemento
+
+<ParamField path="mount(target)" type="void">
+  `target` é um seletor CSS ou um elemento. Lança `already_mounted` na segunda chamada e
+  `mount_target_not_found` quando o seletor não acha nada.
+</ParamField>
+
+<ParamField path="on(event, handler)" type="void">
+  Registra um ouvinte. Exceção lançada dentro de um handler não derruba os outros.
+</ParamField>
+
+<ParamField path="focus()" type="void">
+  Põe o cursor no primeiro campo. Útil depois de o comprador corrigir algo fora do quadro.
+</ParamField>
+
+<ParamField path="confirm()" type="Promise<ChargeResult>">
+  Só no Drop-in. Cobra a sessão. Resolve com a cobrança **paga** no cartão e com ela `pending` no
+  Pix — o Pix resolve cedo de propósito, para o seu botão não ficar travado por meia hora.
+</ParamField>
+
+<ParamField path="createToken(request?)" type="Promise<TokenResult>">
+  Só no Elements. Tokeniza o cartão e, quando a loja exige, autentica o portador antes.
+</ParamField>
+
+<ParamField path="destroy()" type="void">
+  Remove o iframe. Toda promessa pendente é rejeitada com `destroyed` — nenhuma fica presa para
+  sempre num componente que já saiu da tela.
+</ParamField>
+
+## Eventos
+
+```javascript
+elemento.on('change', ({ complete, empty, brand, error }) => { /* ... */ });
+```
+
+| Evento | Payload | Quando dispara |
+| --- | --- | --- |
+| `ready` | — | O quadro montou e aceita chamadas |
+| `change` | `{ complete, empty, brand, error }` | A cada alteração nos campos |
+| `error` | `VextError` | Falha que não pertence a um campo |
+| `result` | `{ id, status, method }` | Drop-in. A cobrança terminou **paga** |
+| `pending` | `{ id, status, method }` | Drop-in. O código Pix foi criado |
+
+<Warning>
+  `pending` não é pagamento. Ele diz que o Pix está na tela, e mais nada. Liberar o produto aqui é
+  liberar antes de receber — quem confirma dinheiro é o webhook
+  [`charge.paid`](/api-reference/webhooks/charge-paid).
+</Warning>
+
+`result` e `pending` são emitidos **sempre**, inclusive quando você usa o próprio botão e já recebeu
+o mesmo desfecho pela `Promise` do `confirm()`. A duplicação é intencional: é o que mantém pixel e
+analytics funcionando sem você reescrever nada ao trocar de botão.
+
+## Tipos devolvidos
+
+```ts
+type TokenResult = {
+  token: string;
+  brand: string | null;
+  lastFour: string | null;
+  threeDs: { transactionId: string; status: string } | null;
+  deviceEventId: string | null;
+};
+
+type ChargeResult = {
+  id: string;      // ch_01k1y6r6m6q2x0p3d9v4t7c8n2
+  status: string;
+  method: string;  // 'pix' | 'credit_card'
+};
+
+class VextError extends Error {
+  readonly code: string;
+  toJSON(): { code: string; message: string; name: string };
+}
+```
+
+`VextError` implementa `toJSON()` porque `Error.message` não é enumerável: um
+`JSON.stringify(erro)` cru chega ao seu log como `{"code":"pix_failed","name":"VextError"}`, sem a
+frase que explica o que houve.
+
+## `createToken(request)`
+
+Todos os campos são opcionais no tipo, mas a autenticação do portador exige três deles.
+
+<ParamField path="holderName" type="string">
+  Nome como está no cartão. Sem ele, cai para `customer.name`; faltando os dois, `holder_name_missing`.
+</ParamField>
+
+<ParamField path="amountCents" type="number">
+  Valor em centavos inteiros. Necessário para a autenticação do portador.
+</ParamField>
+
+<ParamField path="installments" type="number">
+  Número de parcelas, informado à autenticação.
+</ParamField>
+
+<ParamField path="customer" type="object">
+  `name`, `email`, `document` (CPF ou CNPJ, só dígitos) e `phone` (DDD + número).
+</ParamField>
+
+<ParamField path="billingAddress" type="object">
+  `zip_code`, `street`, `number`, `complement`, `neighborhood`, `city`, `state`.
+</ParamField>
+
+O número do cartão, a validade e o CVV **não** estão nesse objeto, e não há como colocá-los ali.
+Eles existem só dentro do iframe.
+
+## Códigos de erro
+
+Vêm em `VextError.code`, no evento `error` ou na rejeição da promessa.
+
+| `code` | Origem |
+| --- | --- |
+| `invalid_publishable_key` | `Vext()` recebeu algo que não é uma `pk_` |
+| `invalid_client_secret` | `checkout()` sem um `cs_` válido |
+| `unknown_element` | `create()` com um tipo que não é `'card'` |
+| `already_mounted` | `mount()` duas vezes |
+| `mount_target_not_found` | O seletor não achou elemento |
+| `not_mounted` | `confirm()` ou `createToken()` antes de montar |
+| `not_ready` | Chamada antes do evento `ready` |
+| `destroyed` | `destroy()` rejeitou uma promessa pendente |
+| `card_invalid` | Dados do cartão reprovados na validação local |
+| `card_unavailable` | A loja não está habilitada a cobrar no cartão |
+| `holder_name_missing` | Nome do titular ausente |
+| `three_ds_data_missing` | Falta `amountCents`, `customer` ou `billingAddress` |
+| `three_ds_failed` | A autenticação do portador não completou |
+| `tokenization_failed` | O provedor recusou os dados do cartão |
+| `card_declined` | A operadora recusou a cobrança |
+| `pix_failed` | Não conseguimos gerar o código Pix |
+| `pix_expired` | O código Pix venceu com o quadro aberto |
+| `confirm_failed` | A confirmação falhou sem um código mais específico |
+
+## Veja também
+
+<CardGroup cols={2}>
+  <Card title="Aparência" icon="palette" href="/embed/aparencia">
+    Tema, cor de destaque e a altura que se ajusta sozinha.
+  </Card>
+  <Card title="Erros" icon="triangle-alert" href="/essenciais/erros">
+    O catálogo de erros da API, com os códigos do cartão.
+  </Card>
+</CardGroup>
+
+<Suporte />

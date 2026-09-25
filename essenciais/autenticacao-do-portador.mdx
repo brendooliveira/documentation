@@ -1,0 +1,122 @@
+---
+title: "Autenticação do portador"
+sidebarTitle: "Autenticação do portador"
+description: "O 3DS transfere para o emissor a responsabilidade por uma contestação. Quando ele entra, quem decide e o que você precisa repassar."
+icon: "shield-check"
+---
+
+import Suporte from "/snippets/suporte.mdx";
+
+A autenticação do portador — 3-D Secure — pede ao banco emissor que confirme quem está usando o
+cartão. Autenticada a compra, uma contestação por "não fui eu" é respondida pelo emissor, e não pelo
+seu saldo. É a diferença entre discutir a venda e perdê-la de antemão.
+
+## Quem decide
+
+Você **pede**; a decisão é nossa. O campo é `three_d_secure`, em `POST /v1/charges` e em
+`POST /v1/checkout_sessions`, com três valores:
+
+| Valor | O que significa |
+| --- | --- |
+| `automatic` | O padrão. Autentica quando a regra da plataforma mandar |
+| `required` | Autentica esta cobrança, sempre |
+| `off` | Não autentica, e o risco da contestação é seu |
+
+A ordem das perguntas é a regra inteira:
+
+<Steps>
+
+<Step title="A sua loja está habilitada a cobrar no cartão?">
+  Se não, não há o que autenticar, e o campo é ignorado.
+</Step>
+
+<Step title="A sua conta exige autenticação?">
+  Se exige, **acabou**: autentica. Essa configuração é o piso, e um `three_d_secure: "off"` na
+  requisição não a desliga. É o que impede que um trecho de código esquecido tire a proteção de uma
+  loja inteira sem ninguém perceber.
+</Step>
+
+<Step title="Você pediu `required`?">
+  Então autentica, mesmo que a sua conta não exija.
+</Step>
+
+<Step title="Você pediu `off`?">
+  Então não autentica. A conta já respondeu no passo anterior, e daqui para baixo quem assume a
+  contestação é quem pediu.
+</Step>
+
+<Step title="O valor chegou ao piso da plataforma?">
+  Se chegou, autentica. Esse piso vale para a API pública e para o embed, onde existe um valor para
+  comparar.
+</Step>
+
+</Steps>
+
+Ligar a exigência para a conta inteira é feito no painel, e é o caminho recomendado: uma regra num
+lugar só resiste melhor do que um campo repetido em cada chamada.
+
+## No embed, você não faz nada
+
+O quadro cuida do desafio inteiro — pede o token, carrega a biblioteca do autenticador, expande-se
+sobre a sua página quando o banco pergunta a senha e volta ao tamanho normal ao terminar. No
+[Drop-in](/embed/drop-in) não há sequer o que configurar.
+
+No [Elements](/embed/elements) a única obrigação é mandar os dados: `amountCents`, `customer` e
+`billingAddress` no `createToken`. Sem eles a autenticação não tem como acontecer, e a chamada falha
+com `three_ds_data_missing` nomeando o que faltou.
+
+Depois, repasse ao seu servidor o objeto `threeDs` **exatamente como veio**, e envie-o em
+`card.three_ds`. Esse par `transaction_id` + `status` é a prova da autenticação: perdê-lo no caminho
+significa ter incomodado o comprador com um desafio e pagado a contestação assim mesmo.
+
+## O resultado, na cobrança
+
+`card.three_d_secure.status` traz uma letra do padrão da bandeira:
+
+| `status` | O que houve |
+| --- | --- |
+| `Y` | Autenticado. A responsabilidade é do emissor |
+| `A` | Tentativa registrada. Vale para a transferência de responsabilidade |
+| `N` | O emissor negou a autenticação |
+| `U` | Não foi possível autenticar |
+| `C` | O emissor pediu o desafio e ele não foi concluído |
+| `R` | O emissor recusou a transação |
+| `I` | Autenticação apenas informativa |
+
+Na entrada, em `card.three_ds.status`, aceitamos **só** `Y` e `A`. Os outros descrevem uma
+autenticação que não deu certo, e mandá-los seria declarar uma proteção que não existe.
+
+<Warning>
+  Cartão guardado e autenticação do portador são excludentes. O autenticador precisa do número do
+  cartão em claro, e um cartão no cofre é uma referência sem número — por isso uma loja que exige
+  autenticação não oferece [Vext Link](/embed/vext-link), e um `card_id` nela volta `403`
+  `one_click_requires_three_ds`. Cobrar assim mesmo, fingindo que autenticou, entregaria a venda sem
+  transferência de responsabilidade, e a loja descobriria isso depois de já ter perdido a
+  contestação.
+</Warning>
+
+## O que dá errado
+
+| `code` | HTTP | O sintoma |
+| --- | --- | --- |
+| `three_ds_data_missing` | — | No navegador. Falta `amountCents`, `customer` ou `billingAddress` |
+| `three_ds_failed` | — | No navegador. O desafio não completou |
+| `one_click_requires_three_ds` | `403` | Cartão guardado numa loja que exige autenticação |
+| `validation_failed` | `422` | `card.three_ds` ausente numa cobrança que exigia autenticação |
+
+O token que inicia a autenticação vale **cinco minutos** e serve uma vez só. O quadro o pede no
+momento em que o comprador envia o formulário, e não quando a página abre: emitido cedo, ele já
+estaria morto para quem levou algum tempo preenchendo o endereço.
+
+## Veja também
+
+<CardGroup cols={2}>
+  <Card title="Cobrança no cartão" icon="credit-card" href="/essenciais/cartao">
+    O objeto `card`, parcelas e a recusa que cria cobrança.
+  </Card>
+  <Card title="Vext Link" icon="zap" href="/embed/vext-link">
+    Por que o cofre e a autenticação não convivem.
+  </Card>
+</CardGroup>
+
+<Suporte />

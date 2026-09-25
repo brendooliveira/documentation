@@ -1,0 +1,180 @@
+---
+title: "Checkout no cartão de ponta a ponta"
+sidebarTitle: "Checkout no cartão"
+description: "Do pedido à liberação do produto, com o embed na página, webhook e o tratamento das recusas."
+icon: "credit-card"
+---
+
+import AvisoCentavos from "/snippets/aviso-centavos.mdx";
+import Suporte from "/snippets/suporte.mdx";
+
+O fluxo completo de uma venda no cartão, do jeito que ele sobrevive a recusa, a análise de fraude e
+a comprador que fecha a aba.
+
+<AvisoCentavos />
+
+<Steps>
+
+<Step title="Abra a sessão com a sua referência">
+
+Gere a `Idempotency-Key` **antes** da chamada e grave-a junto do pedido. Mande `reference` com o seu
+identificador — é o que permite reencontrar a cobrança depois sem depender do `ch_` que ainda não
+existe.
+
+`items` é obrigatório, e a soma de `quantity * amount` precisa bater com o `amount`. No cartão isso
+pesa mais do que no PIX: o detalhamento do carrinho é a peça central da sua defesa quando o portador
+contesta a compra.
+
+```php PHP
+$pedido->update(['chave_idempotencia' => (string) Str::uuid()]);
+
+$sessao = Http::withToken(config('services.vext.key'))
+    ->withHeaders(['Idempotency-Key' => $pedido->chave_idempotencia])
+    ->post('https://api.usevext.com/v1/checkout_sessions', [
+        'amount' => $pedido->total_em_centavos,   // inteiro, sempre
+        'description' => $pedido->descricao,
+        'reference' => "pedido-{$pedido->id}",
+        'max_installments' => 6,
+        'expires_in' => 1800,
+        'items' => $pedido->itens->map(fn ($item) => [
+            'code' => $item->sku,
+            'description' => $item->nome,
+            'quantity' => $item->quantidade,
+            'amount' => $item->preco_unitario_em_centavos,
+        ])->all(),
+        'customer' => [                            // opcional, preenche o formulário
+            'name' => $pedido->cliente->nome,
+            'email' => $pedido->cliente->email,
+        ],
+    ])->json();
+
+$pedido->update(['sessao_id' => $sessao['id']]);
+
+return view('checkout', ['clientSecret' => $sessao['client_secret']]);
+```
+
+O `client_secret` volta uma vez só. Entregue-o à página e **não o grave**: uma sessão perdida se
+resolve abrindo outra, e o que não está no seu banco não vaza dele.
+
+</Step>
+
+<Step title="Monte o quadro">
+
+```html
+<div id="pagamento"></div>
+
+<script src="https://api.usevext.com/v1/vext.js"></script>
+<script>
+  const checkout = Vext('pk_live_...').checkout({
+    clientSecret: '{{ $clientSecret }}',
+  });
+
+  checkout.mount('#pagamento');
+
+  checkout.on('result', ({ id }) => {
+    window.location.href = `/pedidos/{{ $pedido->id }}/obrigado`;
+  });
+
+  checkout.on('pending', () => {
+    // Pix gerado. Mostre "aguardando pagamento", e nada além disso.
+  });
+</script>
+```
+
+Cartão, Pix, parcelas, endereço e a autenticação do portador já estão ali. Confira que o domínio da
+página está na lista da chave publicável — uma chave nova não monta em lugar nenhum.
+
+</Step>
+
+<Step title="Libere no charge.paid">
+
+<Warning>
+  O produto é liberado no `charge.paid`, nunca no evento `result` do navegador. A aba pode ser
+  fechada no segundo seguinte à aprovação, e aí o `result` não chega a ninguém — o pedido ficaria
+  pago e não entregue.
+</Warning>
+
+```php Depois da assinatura conferida
+if ($evento['type'] === 'charge.paid') {
+    $cobranca = $evento['data']['charge'];
+    $pedido = Pedido::where('cobranca_id', $cobranca['id'])->firstOrFail();
+
+    $pedido->marcarComoPago($cobranca['paid_at']);
+    LiberarAcesso::dispatch($pedido);
+}
+```
+
+Como a cobrança nasce dentro do quadro, o `ch_` chega até você pelo webhook, e não por uma resposta
+HTTP sua. Case pelo `reference` na primeira vez e grave o `cobranca_id` para as próximas.
+
+O passo a passo da assinatura está em [Verificar a assinatura](/webhooks/assinatura).
+
+</Step>
+
+<Step title="Trate a análise de fraude">
+
+Uma venda no cartão pode entrar em `in_analysis` antes de decidir. Ela **não** está paga, e também
+não está recusada: o desfecho chega depois, por `charge.paid` ou `charge.failed`.
+
+```php
+match ($evento['type']) {
+    'charge.in_analysis' => $pedido->marcarEmAnalise(),   // segure o envio
+    'charge.paid' => $pedido->marcarComoPago($cobranca['paid_at']),
+    'charge.failed' => $pedido->marcarComoRecusado(),
+    default => null,
+};
+```
+
+Tratar `in_analysis` como recusa cancela vendas boas; tratar como aprovação entrega produto que pode
+não ser pago. Um terceiro estado no seu pedido resolve os dois.
+
+</Step>
+
+<Step title="Trate a recusa sem perder o rastro">
+
+Uma recusa da operadora volta `402 card_declined` — e, ao contrário de um `422`, ela **criou uma
+cobrança**, com status `failed`. O `ch_` está em `error.details.charge_id`.
+
+Grave-o junto do pedido. Ele conta na sua taxa de aprovação, aparece em `GET /v1/charges` e é por
+ele que o suporte encontra a tentativa quando o comprador disser que tentou pagar três vezes.
+
+Mostre ao comprador a `message` que devolvemos, e ofereça outro cartão ou o Pix. Repetir a mesma
+chamada com os mesmos dados dá a mesma recusa.
+
+</Step>
+
+<Step title="Mantenha uma rede de segurança">
+
+Webhook é entrega pela rede, e rede falha. Uma tarefa periódica que consulta as cobranças recentes e
+casa pelo `reference` fecha o buraco:
+
+```bash
+curl "https://api.usevext.com/v1/charges?status=paid&created_from=2026-08-04T00:00:00-03:00" \
+  -H "Authorization: Bearer sk_live_..."
+```
+
+Faça o polling **espaçado**. A cota de leitura é por chave, e gastá-la aqui deixa o resto da sua
+integração sem cota. Ver [Limites de requisição](/essenciais/limites-de-taxa).
+
+</Step>
+
+</Steps>
+
+## Veja também
+
+<CardGroup cols={2}>
+  <Card title="Drop-in" icon="layout-panel-top" href="/embed/drop-in">
+    As opções do quadro e o botão próprio.
+  </Card>
+  <Card title="Cobrança no cartão" icon="credit-card" href="/essenciais/cartao">
+    Parcelas, juros e o objeto `card`.
+  </Card>
+  <Card title="Vext Link" icon="zap" href="/embed/vext-link">
+    A segunda compra com um toque.
+  </Card>
+  <Card title="Conciliação" icon="scale" href="/receitas/conciliacao">
+    Fechar o dia e casar tudo com os seus pedidos.
+  </Card>
+</CardGroup>
+
+<Suporte />
