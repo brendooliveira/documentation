@@ -1,0 +1,240 @@
+---
+title: "Drop-in diferido"
+sidebarTitle: "Drop-in diferido"
+description: "O quadro aparece junto com a página, sem sessão. A sessão nasce no clique de pagar, com o total daquele instante — é assim que order bump, cupom e frete cabem no checkout."
+icon: "gauge-circle-high"
+---
+
+import AvisoCentavos from "/snippets/aviso-centavos.mdx";
+import Suporte from "/snippets/suporte.mdx";
+
+No [Drop-in](/embed/drop-in) comum o quadro só monta depois que o seu servidor abriu a sessão: o
+comprador vê um espaço vazio até a resposta chegar, e o valor fica **congelado** a partir dali.
+
+No diferido é o contrário. Você declara o total na própria montagem, o quadro pinta o formulário
+inteiro na primeira renderização — sem nenhuma chamada ao nosso servidor — e a sessão só nasce
+quando o comprador clica em pagar.
+
+<AvisoCentavos />
+
+## Quando usar
+
+Use o diferido quando o **carrinho ainda muda** depois de o pagamento estar na tela:
+
+- order bump e upsell marcados abaixo do formulário;
+- frete recalculado quando o comprador digita o CEP;
+- cupom aplicado sem recarregar a página.
+
+Com o valor congelado desde a montagem, cada uma dessas mudanças exigiria abrir uma sessão nova e
+**remontar o iframe** — apagando no meio da compra o cartão que o comprador acabou de digitar.
+
+Fique no Drop-in comum quando o total é definitivo antes de o quadro aparecer. Ele é o modo mais
+completo, e o diferido abre mão de coisas reais — ver [O que o diferido não
+tem](#o-que-o-diferido-n%C3%A3o-tem).
+
+## Como funciona
+
+<Steps>
+
+<Step title="Monte com o total, não com a sessão">
+
+```html
+<div id="pagamento"></div>
+
+<script src="https://api.usevext.com/v1/vext.js"></script>
+<script>
+  const vext = Vext('pk_live_...');
+
+  const checkout = vext.checkout({
+    amount: 12900,           // centavos, e só para desenhar
+    maxInstallments: 12,
+    onConfirm: abrirSessao,  // ver o passo seguinte
+  });
+
+  checkout.mount('#pagamento');
+</script>
+```
+
+O quadro aparece imediatamente, já com as abas, a grade de parcelas e o botão escrito
+`Pagar R$ 129,00`. Não há requisição nenhuma entre montar e o comprador começar a digitar: tudo que
+o quadro precisa desenhar vem dentro do próprio documento do iframe.
+
+<Warning>
+  O `amount` daqui **não cobra nada**. Ele monta o botão e calcula as parcelas. Quem cobra é a
+  sessão que o seu servidor abre no `onConfirm` — e o quadro recusa a cobrança se os dois números
+  não baterem.
+</Warning>
+
+</Step>
+
+<Step title="Abra a sessão no clique, com o total daquele instante">
+
+`onConfirm` é chamado quando o comprador clica em pagar, depois de o formulário passar na validação.
+Ele abre a sessão no seu servidor — com a chave secreta, que continua sem aparecer no navegador — e
+devolve o `client_secret`.
+
+```javascript
+async function abrirSessao() {
+  const resposta = await fetch('/checkout/sessao', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    // O carrinho do NAVEGADOR não decide o preço: mande o identificador do
+    // carrinho, e deixe o seu servidor somar. Ver o aviso abaixo.
+    body: JSON.stringify({ carrinho: carrinhoId }),
+  });
+
+  const { client_secret: clientSecret } = await resposta.json();
+
+  return clientSecret;   // 'cs_..._secret_...'
+}
+```
+
+```php O seu endpoint, em PHP
+Route::post('/checkout/sessao', function (Request $request) {
+    $carrinho = Carrinho::findOrFail($request->string('carrinho'));
+
+    // O TOTAL É CALCULADO AQUI, do carrinho guardado no seu banco.
+    // Aceitar o valor que o navegador mandou deixaria qualquer um
+    // comprar por um centavo.
+    $sessao = Http::withToken(config('services.vext.key'))
+        ->post('https://api.usevext.com/v1/checkout_sessions', [
+            'amount' => $carrinho->totalEmCentavos(),
+            'reference' => "carrinho-{$carrinho->id}",
+            'max_installments' => 12,
+            'items' => $carrinho->itensParaVext(),
+        ])->json();
+
+    return ['client_secret' => $sessao['client_secret']];
+});
+```
+
+<Warning>
+  **Não mande o valor do navegador para o seu endpoint.** O total que interessa é o que o seu
+  servidor calcula a partir do carrinho dele. O `amount` da montagem existe para o comprador ler,
+  e o `amount` da sessão para cobrar — quando os dois discordam, quem está errado é o seu
+  carrinho, não o comprador.
+</Warning>
+
+</Step>
+
+<Step title="Avise o quadro a cada mudança do carrinho">
+
+```javascript
+bump.addEventListener('change', () => {
+  const total = BASE + (bump.checked ? BUMP : 0);
+
+  document.querySelector('#total').textContent = formatar(total);
+  checkout.update({ amount: total });
+});
+```
+
+`update()` redesenha o botão e **refaz a grade de parcelas no servidor** — a conta das parcelas é
+uma só, nossa, porque recalculá-la em JavaScript criaria duas capazes de divergir. Se o comprador
+tinha escolhido 12x e o total novo não chega lá, a escolha cai para a maior parcela que ainda
+existe.
+
+Chamar `update()` antes do evento `ready` é seguro: o valor fica guardado e é aplicado assim que o
+quadro monta. É o caso de uma página que calcula frete sozinha no carregamento.
+
+</Step>
+
+</Steps>
+
+## A conferência de valor
+
+Quando o `onConfirm` devolve o segredo, o quadro carrega a sessão e compara o valor dela com o que
+está escrito no botão. **Só cobra se os dois forem iguais.**
+
+| Na tela | Na sessão | O que acontece |
+| --- | --- | --- |
+| R$ 178,00 | R$ 178,00 | Cobra |
+| R$ 178,00 | R$ 129,00 | `amount_mismatch` — **nada é cobrado** |
+
+A mesma régua vale para o resto do que o comprador escolheu: um meio de pagamento que a sessão não
+oferece é `payment_method_mismatch`, e um teto de parcelas menor que o declarado na montagem é
+`installments_mismatch`. Em nenhum dos três o quadro corrige a escolha por conta própria — a
+parcela é o preço que o comprador leu e aceitou, e trocá-la no caminho é a mesma traição do valor,
+um passo adiante.
+
+Não há resposta boa para a divergência: cobrar o valor do servidor cobra algo que o comprador não
+concordou em pagar, e sobre o qual ele escolheu a parcela; cobrar o da tela seria o navegador
+escolhendo o preço. O certo é não cobrar e dizer por quê.
+
+Na prática, `amount_mismatch` significa que o seu carrinho e a sua página saíram de sincronia — o
+order bump marcado no mesmo instante do clique, ou um `update()` que faltou.
+
+## Retentativa depois de uma recusa
+
+Uma sessão cobra **uma vez**, e a recusa do emissor conta: a cobrança existe, com status recusado, e
+a sessão morreu com ela.
+
+No diferido isso se resolve sozinho. Depois de um `card_declined` ou `pix_failed`, o quadro descarta
+o segredo e o clique seguinte chama o seu `onConfirm` de novo, abrindo uma sessão nova. O comprador
+troca de cartão e tenta outra vez, na mesma página.
+
+<Note>
+  Erro de preenchimento é exceção: um `422` de validação não chega a criar cobrança, a sessão
+  continua de pé, e o quadro a reaproveita. Assim o comprador não gasta uma sessão por dígito
+  errado de CPF.
+</Note>
+
+## O que o diferido não tem
+
+<AccordionGroup>
+
+<Accordion title="Vext Link e cartão guardado" icon="zap">
+  O [Vext Link](/embed/vext-link) reconhece o comprador pelo e-mail e mostra os cartões que ele já
+  deixou guardados. A fechadura desse reconhecimento é o `client_secret` — e no diferido ele não
+  existe até o clique de pagar.
+
+  Abrir o reconhecimento à chave publicável, que está no código-fonte de uma página pública,
+  transformaria o recurso num oráculo: qualquer um descobriria se um e-mail já comprou na sua loja.
+  Preferimos a omissão.
+
+  Precisa de Link? Use o [Drop-in com sessão](/embed/drop-in).
+</Accordion>
+
+<Accordion title="Compra de um clique" icon="hand-pointer">
+  A sessão de um clique aponta para um cartão do cofre e existe para cobrar dele. No diferido o
+  comprador já digitou um cartão na tela quando a sessão nasce, e seguir dali cobraria o cartão
+  guardado jogando fora o que ele preencheu. O quadro recusa com `session_mismatch`.
+</Accordion>
+
+<Accordion title="Itens e descrição na montagem" icon="list">
+  O quadro não mostra o carrinho — quem o mostra é a sua página, logo acima dele. `items`,
+  `description`, `reference` e `metadata` continuam existindo, na sessão que o seu servidor abre, e
+  é de lá que eles chegam ao recibo, ao webhook e à sua conciliação.
+</Accordion>
+
+</AccordionGroup>
+
+## Os dois modos, lado a lado
+
+| | Com `clientSecret` | Diferido |
+| --- | --- | --- |
+| Quando o quadro aparece | Depois da sessão abrir | Junto com a página |
+| Chamadas antes da primeira pintura | Uma, do seu servidor | Nenhuma |
+| Quando o valor congela | Na montagem | No clique de pagar |
+| Carrinho que muda na tela | Exige remontar o iframe | `update({ amount })` |
+| Vext Link e cartão guardado | Sim | Não |
+| Compra de um clique | Sim | Não |
+| Onde o total é decidido | Sempre no seu servidor | Sempre no seu servidor |
+
+## Veja também
+
+<CardGroup cols={2}>
+  <Card title="Drop-in" icon="layout-panel-top" href="/embed/drop-in">
+    O modo com sessão, com Vext Link e um clique.
+  </Card>
+  <Card title="Referência do SDK" icon="braces" href="/embed/sdk">
+    `onConfirm`, `update()` e os códigos de erro.
+  </Card>
+  <Card title="Abrir sessão" icon="terminal" href="/api-reference/checkout/criar">
+    Todos os campos de `POST /v1/checkout_sessions`.
+  </Card>
+  <Card title="Aparência" icon="palette" href="/embed/aparencia">
+    Tema, cor de destaque e botão próprio.
+  </Card>
+</CardGroup>
+
+<Suporte />

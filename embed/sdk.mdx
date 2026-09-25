@@ -32,8 +32,10 @@ Devolve um objeto com exatamente dois métodos.
 </ParamField>
 
 <ParamField path="checkout(options)" type="function">
-  Devolve o elemento do [Drop-in](/embed/drop-in) já configurado. Exige `clientSecret` começando com
-  `cs_`, senão lança `invalid_client_secret`.
+  Devolve o elemento do [Drop-in](/embed/drop-in) já configurado. Aceita uma de duas formas:
+  `clientSecret` (a sessão manda no valor) ou `amount` + `onConfirm` (o
+  [diferido](/embed/drop-in-diferido), em que a sessão nasce no clique). As duas juntas lançam
+  `ambiguous_checkout`; nenhuma delas, `invalid_client_secret`.
 </ParamField>
 
 ## Opções de aparência
@@ -53,14 +55,53 @@ Valem para os dois modos. Todas são opcionais, e omitir qualquer uma nunca remo
   `false` esconde o nosso botão. Você desenha o seu e chama `confirm()`.
 </ParamField>
 
-<ParamField path="clientSecret" type="string" required>
-  Só em `checkout()`. O `cs_..._secret_...` devolvido por `POST /v1/checkout_sessions`.
-</ParamField>
-
 Não existe um objeto de estilos livre, do tipo `appearance: { input: { border: ... } }`. Cada
 propriedade aceita ali viraria CSS dentro de um documento que tem campo de cartão, e é por essa
 fresta que um script injetado desenharia um campo falso por cima do nosso. Ver
 [Aparência](/embed/aparencia) para o que dá para mudar.
+
+## Opções do `checkout()`
+
+Uma das duas colunas, nunca as duas. Declarar `clientSecret` e `amount` juntos lança
+`ambiguous_checkout` na hora da chamada — aceitar ambos significaria escolher um deles em silêncio,
+e quem escreveu os dois acha que os dois valem.
+
+<ParamField path="clientSecret" type="string">
+  O `cs_..._secret_...` devolvido por `POST /v1/checkout_sessions`. Com ele, o valor está congelado
+  na sessão e o quadro lê tudo de lá. É o modo com [Vext Link](/embed/vext-link), cartão guardado e
+  compra de um clique.
+</ParamField>
+
+<ParamField path="amount" type="number">
+  O total em centavos inteiros, para **desenhar** — botão e grade de parcelas. Não cobra nada:
+  quem cobra é a sessão que o `onConfirm` abre. Decimal ou zero lança `invalid_amount`. Ativa o
+  [modo diferido](/embed/drop-in-diferido).
+</ParamField>
+
+<ParamField path="onConfirm" type="() => Promise<string> | string">
+  Obrigatório no diferido. Chamado no clique de pagar, depois da validação: abre a sessão no seu
+  servidor e devolve o `client_secret`. Chamado **uma vez por tentativa** — uma recusa do emissor
+  queima a sessão, e o clique seguinte o chama de novo. Ausente, lança `missing_on_confirm`.
+</ParamField>
+
+<ParamField path="paymentMethods" type="('pix' | 'credit_card')[]">
+  Só no diferido. Omitir oferece todos os que a sua loja aceita; o campo existe para oferecer
+  **menos**, nunca mais.
+</ParamField>
+
+<ParamField path="maxInstallments" type="number">
+  Só no diferido. De 1 a 12. O limite real é o menor entre este, a escada por valor e a taxa da sua
+  conta — um número grande aqui não amplia nada. Fora da faixa, é ignorado.
+</ParamField>
+
+<ParamField path="customer" type="object">
+  Só no diferido. `name`, `email`, `document` (CPF ou CNPJ) e `phone` (com DDD), para o comprador
+  não digitar o que você já sabe. Continua editável na tela.
+
+  Viaja no **fragmento** da URL do quadro: não chega ao nosso servidor e não entra em log de acesso
+  nenhum. No modo com sessão, este dado vem do `customer` que você mandou em
+  `POST /v1/checkout_sessions`.
+</ParamField>
 
 ## Métodos do elemento
 
@@ -80,6 +121,13 @@ fresta que um script injetado desenharia um campo falso por cima do nosso. Ver
 <ParamField path="confirm()" type="Promise<ChargeResult>">
   Só no Drop-in. Cobra a sessão. Resolve com a cobrança **paga** no cartão e com ela `pending` no
   Pix — o Pix resolve cedo de propósito, para o seu botão não ficar travado por meia hora.
+</ParamField>
+
+<ParamField path="update({ amount })" type="void">
+  Só no Drop-in [diferido](/embed/drop-in-diferido). Redesenha o total e refaz a grade de parcelas.
+  Chamada antes do `ready` é guardada e aplicada na montagem. Depois de o código Pix estar na tela,
+  é recusada com o evento `error` e o código `update_after_charge`. No modo com `clientSecret`,
+  lança `update_not_supported` — ali o valor é da sessão.
 </ParamField>
 
 <ParamField path="createToken(request?)" type="Promise<TokenResult>">
@@ -176,7 +224,17 @@ Vêm em `VextError.code`, no evento `error` ou na rejeição da promessa.
 | `code` | Origem |
 | --- | --- |
 | `invalid_publishable_key` | `Vext()` recebeu algo que não é uma `pk_` |
-| `invalid_client_secret` | `checkout()` sem um `cs_` válido |
+| `invalid_client_secret` | `checkout()` sem um `cs_` válido, ou `onConfirm` devolvendo outra coisa |
+| `ambiguous_checkout` | `checkout()` com `clientSecret` **e** `amount` juntos |
+| `invalid_amount` | `amount` que não é centavo inteiro maior que zero |
+| `missing_on_confirm` | Diferido montado sem `onConfirm` |
+| `update_not_supported` | `update()` num quadro aberto com `clientSecret` |
+| `update_after_charge` | `update()` com o código Pix já na tela |
+| `session_failed` | O `onConfirm` falhou, expirou, ou a sessão não carregou |
+| `amount_mismatch` | A sessão abriu por um valor diferente do que está na tela |
+| `payment_method_mismatch` | A sessão não oferece o meio que o comprador escolheu |
+| `installments_mismatch` | A sessão limita o parcelamento abaixo do que estava na tela |
+| `session_mismatch` | Sessão de um clique usada no diferido |
 | `unknown_element` | `create()` com um tipo que não é `'card'` |
 | `already_mounted` | `mount()` duas vezes |
 | `mount_target_not_found` | O seletor não achou elemento |

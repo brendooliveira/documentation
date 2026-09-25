@@ -663,9 +663,8 @@ paths:
       summary: Abrir sessão de checkout
       operationId: createCheckoutSession
       description: |
-        Abre uma sessão para o **embed** cobrar. É o primeiro passo do
-        Drop-in: o seu servidor diz quanto e de quem, e o navegador do
-        comprador só confirma.
+        Abre uma sessão para o **embed** cobrar: o seu servidor diz quanto
+        e de quem, e o navegador do comprador só confirma.
 
         A resposta traz um `client_secret`, e é ele que você entrega ao
         JavaScript da sua página:
@@ -674,6 +673,25 @@ paths:
         const vext = Vext('pk_live_…')
         vext.checkout({ clientSecret }).mount('#pagamento')
         ```
+
+        ## Quando abrir a sessão
+
+        No Drop-in comum, **antes** de montar o quadro: o valor fica
+        congelado desde ali, e é esse modo que tem Vext Link, cartão
+        guardado e compra de um clique.
+
+        No **Drop-in diferido**, no clique de pagar. O quadro monta sem
+        sessão nenhuma - com o total declarado no navegador, que só serve
+        para desenhar - e chama o `onConfirm` do lojista quando o
+        comprador termina de preencher. É o modo para páginas em que o
+        carrinho ainda muda depois de o pagamento estar na tela: order
+        bump, cupom, frete calculado.
+
+        A sessão é a mesma nos dois; o que muda é o instante em que ela
+        nasce. E a regra abaixo vale igual: o valor é o desta chamada, e
+        o navegador não o contradiz - no diferido, um total de tela
+        diferente do desta sessão faz o quadro **recusar** a cobrança em
+        vez de cobrar qualquer um dos dois.
 
         ## Por que a sessão existe
 
@@ -1408,7 +1426,7 @@ paths:
         sua página nem pelo nosso servidor - é o que mantém as duas casas
         fora do escopo de PCI.
 
-        O arquivo é pequeno de propósito (~2 kB comprimido): ele é baixado
+        O arquivo é pequeno de propósito (~3 kB comprimido): ele é baixado
         por todo visitante do seu site, inclusive por quem nunca chega ao
         pagamento. O formulário de verdade vive no iframe, e só é buscado
         por quem abre o checkout.
@@ -1561,6 +1579,86 @@ paths:
           schema:
             type: string
             enum: ['false']
+        - name: mode
+          in: query
+          description: |
+            Qual das duas superfícies está sendo montada. `elements` é só o
+            campo de cartão, que devolve um token para o servidor do
+            lojista cobrar; `checkout` é o Drop-in, que pede os dados do
+            comprador, oferece Pix e confirma sozinho.
+
+            **Um valor desconhecido vira `elements`**, o mais restrito dos
+            dois: quem errou o nome do modo recebe menos do que pediu,
+            nunca mais.
+
+            Montado pelo `vext.js` conforme você tenha chamado
+            `Vext(pk).elements(…)` ou `Vext(pk).checkout(…)`.
+          schema:
+            type: string
+            enum: [elements, checkout]
+            default: elements
+        - name: amount
+          in: query
+          description: |
+            O total em **centavos inteiros**, e só no Drop-in diferido -
+            aquele montado com `Vext(pk).checkout({ amount, onConfirm })`,
+            sem `client_secret`. Ver
+            [Drop-in diferido](/embed/drop-in-diferido).
+
+            **Este valor não cobra nada.** Ele existe para o servidor
+            calcular a grade de parcelas e escrever o total dentro do
+            documento do quadro, de modo que o formulário apareça completo
+            na primeira pintura, sem nenhuma chamada. Quem cobra é a
+            sessão que o servidor do lojista abre no clique de pagar - e o
+            quadro **recusa** a cobrança quando o valor da sessão é
+            diferente deste, com `amount_mismatch`.
+
+            É por isso que aceitá-lo aqui não abre porta nenhuma: a chave
+            publicável está no código-fonte de uma página pública, e quem
+            reescrever a URL do iframe muda só o número que lê na tela. A
+            cobrança continua exigindo a chave secreta do lojista.
+
+            **Valor que não seja inteiro de 1 a 9 dígitos é ignorado**, e a
+            página monta sem o preview - o quadro trata a ausência como
+            pagamento mal aberto e mostra a frase ao comprador. O
+            carregador já recusa antes de montar, então chegar aqui torto
+            significa URL adulterada.
+          schema:
+            type: integer
+            minimum: 1
+          example: 12775
+        - name: methods
+          in: query
+          description: |
+            Os meios que esta venda oferece, separados por vírgula. Só no
+            Drop-in diferido, e só quando o lojista quer oferecer **menos**
+            do que a loja aceita - omitir já significa todos os
+            disponíveis.
+
+            Cruzado com a disponibilidade do momento: um método que a loja
+            não aceita não entra na lista por vir escrito aqui.
+
+            Montado pelo `vext.js` a partir da opção `paymentMethods`.
+          schema:
+            type: string
+            example: pix,credit_card
+        - name: max_installments
+          in: query
+          description: |
+            O teto de parcelas que o lojista quer impor, de 1 a 12. Só no
+            Drop-in diferido.
+
+            O limite real é o **menor** entre este, a escada por valor e a
+            taxa da conta - um número grande aqui não amplia nada. Valor
+            fora da faixa é ignorado, pela mesma regra da cor de destaque:
+            um detalhe mal escrito na montagem não pode custar a venda.
+
+            Montado pelo `vext.js` a partir da opção `maxInstallments`.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 12
+          example: 12
       responses:
         '200':
           description: O documento do formulário.

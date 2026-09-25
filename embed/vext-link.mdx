@@ -13,6 +13,13 @@ Vext. Um toque, e a compra termina.
 Ele aparece sozinho no [Drop-in](/embed/drop-in), sem opção para ligar, e some quando não pode
 funcionar. O cofre por trás dele é o mesmo dos [cartões guardados](/essenciais/cofre-de-cartoes).
 
+<Warning>
+  Exige o Drop-in montado **com `clientSecret`**. No [diferido](/embed/drop-in-diferido) não há
+  sessão até o clique de pagar, e é o `client_secret` que tranca o reconhecimento pelo e-mail —
+  abri-lo à chave publicável, que está no código-fonte de uma página pública, deixaria qualquer um
+  descobrir quem já comprou na sua loja.
+</Warning>
+
 ## Como o comprador atravessa
 
 <Steps>

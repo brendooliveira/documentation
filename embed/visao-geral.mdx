@@ -47,6 +47,13 @@ Comece pelo **Drop-in**. Ele é a única forma que traz Pix, parcelamento, 3DS e
 sem código seu, e é onde o pagamento de um toque existe. Vá para o Elements quando o layout da sua
 página exigir os campos soltos no meio do seu próprio formulário.
 
+<Note>
+  O Drop-in monta de dois jeitos. Com `clientSecret`, o quadro aparece depois que o seu servidor
+  abre a sessão, e o valor fica congelado a partir dali. No
+  [**diferido**](/embed/drop-in-diferido), ele aparece junto com a página e a sessão nasce no
+  clique de pagar — é o modo para checkouts com order bump, cupom ou frete calculado na tela.
+</Note>
+
 <Frame caption="No Elements, os campos do cartão entram no meio do formulário da loja.">
   <img src="/images/embed/elements.png" alt="Formulário da loja com nome e e-mail próprios e, abaixo, os campos de cartão da Vext" />
 </Frame>
