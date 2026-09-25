@@ -11,15 +11,12 @@ A Vext é um gateway de pagamentos PIX e cartão, com split entre o vendedor e a
 a cobrança, mostra o QR ou o formulário de cartão ao comprador, e nós avisamos quando o dinheiro
 entra.
 
-<CardGroup cols={2}>
+<CardGroup cols={3}>
   <Card title="Primeira cobrança" icon="rocket" href="/quickstart">
     Do `sk_test_` ao QR na tela, com o webhook já ligado.
   </Card>
-  <Card title="Embed no navegador" icon="credit-card" href="/embed/visao-geral">
-    Cobrar no cartão sem que o número passe pelo seu servidor.
-  </Card>
   <Card title="Referência da API" icon="terminal" href="/api-reference/introducao">
-    As doze operações, com playground.
+    As nove operações, com playground.
   </Card>
   <Card title="Webhooks" icon="webhook" href="/webhooks/visao-geral">
     Os nove eventos e como conferir a assinatura.
@@ -46,10 +43,7 @@ documentação fica previsível — e você evita os quatro tropeços mais comun
   que nem um vazamento do nosso banco permite cobrar em seu nome. Em troca, a chave é sua para
   guardar — e o lugar dela é o servidor, nunca o navegador do comprador.
 
-  Para o navegador existe a outra chave, a publicável. Ela nasce para ficar à vista, e o que a
-  protege é a lista de domínios onde pode ser usada.
-
-  [Autenticação →](/essenciais/autenticacao) · [Chave publicável →](/embed/chave-publicavel)
+  [Autenticação →](/essenciais/autenticacao)
 </Accordion>
 
 <Accordion title="Idempotency-Key em todo POST" icon="repeat">
@@ -70,7 +64,7 @@ documentação fica previsível — e você evita os quatro tropeços mais comun
 
 ## O que existe na v1
 
-**Doze operações** de servidor, todas sob `/v1` e autenticadas por chave secreta:
+**Nove operações** de servidor, todas sob `/v1` e autenticadas por chave secreta:
 
 | Operação | Endpoint |
 | --- | --- |
@@ -79,16 +73,10 @@ documentação fica previsível — e você evita os quatro tropeços mais comun
 | [Consultar cobrança](/api-reference/cobrancas/consultar) | `GET /v1/charges/{code}` |
 | [Estornar cobrança](/api-reference/cobrancas/estornar) | `POST /v1/charges/{code}/refund` |
 | [Grade de parcelas](/api-reference/cobrancas/parcelas) | `GET /v1/installments` |
-| [Abrir sessão de checkout](/api-reference/checkout/criar) | `POST /v1/checkout_sessions` |
-| [Consultar sessão](/api-reference/checkout/consultar) | `GET /v1/checkout_sessions/{code}` |
-| [Encerrar sessão](/api-reference/checkout/encerrar) | `POST /v1/checkout_sessions/{code}/expire` |
 | [Listar cartões guardados](/api-reference/cartoes/listar) | `GET /v1/cards` |
 | [Consultar cartão guardado](/api-reference/cartoes/consultar) | `GET /v1/cards/{code}` |
 | [Remover cartão guardado](/api-reference/cartoes/remover) | `DELETE /v1/cards/{code}` |
 | [Consultar saldo](/api-reference/saldo/consultar) | `GET /v1/balance` |
-
-Mais o grupo `/v1/embed`, que o **navegador** do comprador chama com a chave publicável. Você não o
-chama à mão: quem fala com ele é o nosso script. Ver [Embed no navegador](/embed/visao-geral).
 
 **Nove eventos**, que nós enviamos para o seu sistema:
 
@@ -112,8 +100,9 @@ Para você não procurar o que não existe:
   biblioteca de QR o transforma em imagem em milissegundos. Assim as respostas ficam leves e você
   controla tamanho, cor e formato.
 - **O número do cartão não passa por você.** `POST /v1/charges` cria cobrança no cartão, mas o que
-  ela recebe é um `token` produzido no navegador pelo [embed](/embed/visao-geral) — nunca o PAN.
-  Omitindo `payment_method`, a cobrança continua sendo PIX, como sempre foi.
+  ela recebe é um `token` de uso único, gerado no navegador do comprador pela biblioteca da
+  Pagar.me — nunca o PAN. Omitindo `payment_method`, a cobrança continua sendo PIX, como sempre foi.
+  Ver [Cobrança no cartão](/essenciais/cartao).
 - **Um cartão entra no cofre vendendo, não cadastrando.** Não há `POST /v1/cards`: o cartão é
   guardado como efeito de uma cobrança aprovada com `save_card`. Ver
   [Cofre de cartões](/essenciais/cofre-de-cartoes).

@@ -20,7 +20,7 @@
 | `seller_not_approved` | 422 | `invalid_request_error` | Nada na chamada resolve. O caminho é o painel |
 | `provider_rejected` | 422 | `invalid_request_error` | Confira os dados do comprador e o valor |
 | `card_expired` | 422 | `invalid_request_error` | O cartão guardado venceu. Peça um novo ao comprador |
-| `card_revoked` | 422 | `invalid_request_error` | O cartão guardado foi removido, por você ou pelo comprador |
+| `card_revoked` | 422 | `invalid_request_error` | O cartão guardado foi removido. Peça um novo ao comprador |
 | `card_not_usable_on_account` | 422 | `invalid_request_error` | O cartão não vale na conta que está cobrando. Ver [Cofre de cartões](/essenciais/cofre-de-cartoes) |
 | `charge_not_refundable` | 422 | `invalid_request_error` | Só cobrança paga é estornável |
 | `exceeds_remaining` | 422 | `invalid_request_error` | Peça no máximo o saldo estornável, ou omita `amount` |

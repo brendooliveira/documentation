@@ -58,20 +58,6 @@
             ]
           },
           {
-            "group": "Embed no navegador",
-            "icon": "credit-card",
-            "pages": [
-              "embed/visao-geral",
-              "embed/chave-publicavel",
-              "embed/drop-in",
-              "embed/drop-in-diferido",
-              "embed/elements",
-              "embed/vext-link",
-              "embed/aparencia",
-              "embed/sdk"
-            ]
-          },
-          {
             "group": "Webhooks",
             "icon": "webhook",
             "pages": [
@@ -85,7 +71,6 @@
             "icon": "route",
             "pages": [
               "receitas/checkout-pix",
-              "receitas/checkout-cartao",
               "receitas/conciliacao",
               "receitas/repetir-com-seguranca",
               "receitas/estorno-parcial"
@@ -111,31 +96,11 @@
             ]
           },
           {
-            "group": "Checkout",
-            "pages": [
-              "api-reference/checkout/criar",
-              "api-reference/checkout/consultar",
-              "api-reference/checkout/encerrar"
-            ]
-          },
-          {
             "group": "Cartões",
             "pages": [
               "api-reference/cartoes/listar",
               "api-reference/cartoes/consultar",
               "api-reference/cartoes/remover"
-            ]
-          },
-          {
-            "group": "Embed (navegador)",
-            "pages": [
-              "api-reference/embed/script",
-              "api-reference/embed/elements",
-              "api-reference/embed/sessao",
-              "api-reference/embed/confirmar",
-              "api-reference/embed/status",
-              "api-reference/embed/three-ds-token",
-              "api-reference/embed/link"
             ]
           },
           {

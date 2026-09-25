@@ -13,7 +13,7 @@ o comprador não redigita número, validade nem CVV.
 
 Só de um jeito: como efeito de uma **venda aprovada** em que alguém pediu para guardar.
 
-```json Ao abrir a sessão, ou ao criar a cobrança
+```json Ao criar a cobrança
 { "amount": 10000, "save_card": true }
 ```
 
@@ -23,10 +23,6 @@ prova de que aquele cartão era mesmo do comprador.
 
 Uma cobrança recusada não guarda nada. Se o cofre falhar por qualquer motivo, a venda segue
 aprovada: guardar um cartão nunca pode derrubar um pagamento que já deu certo.
-
-O comprador também pode pedir, marcando a caixa no [embed](/embed/vext-link). Ela é oferecida
-quando você **não** mandou `save_card` na sessão — com os dois, a caixa seria decorativa, e um
-controle que não muda nada é pior do que nenhum.
 
 ## Como cobrar com ele
 
@@ -41,11 +37,8 @@ Em `POST /v1/charges`, troque o `token` pelo `id`:
 }
 ```
 
-No embed, o caminho é abrir a sessão com `card_id` — o quadro nasce com o cartão escolhido e sem
-campos para preencher. Ver [Vext Link](/embed/vext-link).
-
-`card_id` e `save_card` não convivem na mesma sessão: um cartão que já está no cofre não entra nele
-de novo.
+`card.id` e `save_card` não convivem na mesma cobrança: um cartão que já está no cofre não entra
+nele de novo.
 
 ## Consultar e remover
 
@@ -64,8 +57,6 @@ específico. Cartões vencidos ficam de fora por padrão; `include_expired=true`
 existindo — é o que permite responder "com que cartão foi aquela cobrança de março" um ano depois.
 Apagar a linha deixaria a sua conciliação com um buraco justamente nas vendas que alguém contestou.
 
-O comprador também remove os próprios cartões, dentro do quadro, sem passar por você.
-
 <Note>
   `last_four` e `brand` são para exibir, nunca para reconhecer. Dois cartões do mesmo comprador
   podem terminar nos mesmos quatro dígitos, e a bandeira que precifica a parcela é detectada pelo
@@ -78,7 +69,7 @@ O comprador também remove os próprios cartões, dentro do quadro, sem passar p
 | --- | --- | --- |
 | `card_not_found` | `404` | O `pm_` não existe, ou é de outra conta |
 | `card_expired` | `422` | A validade passou |
-| `card_revoked` | `422` | O cartão foi removido, por você ou pelo comprador |
+| `card_revoked` | `422` | O cartão foi removido |
 | `card_not_usable_on_account` | `422` | O cartão não vale na conta que está cobrando |
 | `one_click_requires_three_ds` | `403` | A loja exige [autenticação do portador](/essenciais/autenticacao-do-portador) |
 | `insufficient_scope` | `403` | A chave não tem `cards:manage` |
@@ -93,11 +84,11 @@ O comprador também remove os próprios cartões, dentro do quadro, sem passar p
 ## Veja também
 
 <CardGroup cols={2}>
-  <Card title="Vext Link" icon="zap" href="/embed/vext-link">
-    O comprador reconhecido escolhendo um cartão do cofre.
-  </Card>
   <Card title="Cobrança no cartão" icon="credit-card" href="/essenciais/cartao">
     Parcelas, juros e o objeto `card` da resposta.
+  </Card>
+  <Card title="Autenticação do portador" icon="shield-check" href="/essenciais/autenticacao-do-portador">
+    Por que o cofre e a autenticação não convivem.
   </Card>
 </CardGroup>
 

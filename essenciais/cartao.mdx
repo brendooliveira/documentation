@@ -16,7 +16,7 @@ Uma cobrança no cartão nasce de `POST /v1/charges` com `payment_method: "credi
 ## A regra
 
 O número do cartão não entra nessa chamada. O que entra é um `token` de uso único, produzido no
-navegador pelo [embed](/embed/visao-geral), ou o `id` de um
+navegador pela biblioteca de tokenização da Pagar.me, ou o `id` de um
 [cartão guardado](/essenciais/cofre-de-cartoes).
 
 ```json Cobrança de R$ 100,00 em 3x
@@ -79,10 +79,6 @@ A grade de parcelas não é fixa: ela muda por bandeira e por valor, e quem a ca
 Consulte-a em [`GET /v1/installments`](/api-reference/cobrancas/parcelas) e mostre ao comprador os
 valores que vieram de lá.
 
-<Frame caption="A grade como o embed a apresenta, com o total e os juros escritos por extenso.">
-  <img src="/images/embed/parcelas.png" alt="Lista de parcelamento de 1x a 12x, com o valor de cada parcela e a indicação de juros" />
-</Frame>
-
 O juro, quando houver, é cobrado **do comprador** e soma ao total. Ele volta em `card.interest`, em
 centavos, e o `amount` da cobrança continua sendo o preço do seu produto — é o que faz a sua
 conciliação fechar sem descobrir a diferença no fim do mês.
@@ -108,7 +104,7 @@ resultado da [autenticação do portador](/essenciais/autenticacao-do-portador) 
 | `card_declined` | `402` | A operadora recusou. A cobrança existe, com status `failed` |
 | `validation_failed` | `422` | Falta `installments`, ou `card` veio numa cobrança PIX |
 | `one_click_requires_three_ds` | `403` | Cartão guardado numa loja que exige autenticação do portador |
-| `card_not_found` | `404` | O `pm_` não é do comprador daquela sessão |
+| `card_not_found` | `404` | O `pm_` não existe, ou é de outro comprador |
 | `card_expired` | `422` | O cartão guardado venceu |
 | `card_revoked` | `422` | O cartão guardado foi removido |
 | `card_not_usable_on_account` | `422` | O cartão guardado não vale na conta que está cobrando |
@@ -121,9 +117,6 @@ recusada: a análise de fraude segurou o pagamento e o desfecho chega por
 ## Veja também
 
 <CardGroup cols={2}>
-  <Card title="Embed no navegador" icon="credit-card" href="/embed/visao-geral">
-    Cobrar sem que o número do cartão passe pelo seu servidor.
-  </Card>
   <Card title="Autenticação do portador" icon="shield-check" href="/essenciais/autenticacao-do-portador">
     Quando o 3DS entra e o que ele muda numa contestação.
   </Card>

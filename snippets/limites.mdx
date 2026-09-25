@@ -7,10 +7,5 @@
 | Itens em uma cobrança (`items`) | 1 a 100, obrigatório | `POST /v1/charges` |
 | Janela de replay do webhook | 5 minutos | [Verificar a assinatura](/webhooks/assinatura) |
 | Prazo para estornar | 90 dias contados do **pagamento** | [Estornos](/essenciais/estornos) |
-| Validade da sessão de checkout (`expires_in`) | 300 s a 86.400 s, padrão 1.800 s (30 minutos) | [Drop-in](/embed/drop-in) |
 | Parcelas (`max_installments`) | 1 a 12 | [Cobrança no cartão](/essenciais/cartao) |
-| Confirmações por sessão | 3 por minuto | [Drop-in](/embed/drop-in) |
 | Validade do token de autenticação do portador | 5 minutos, uso único | [Autenticação do portador](/essenciais/autenticacao-do-portador) |
-| Código do Vext Link | 10 minutos, 5 tentativas | [Vext Link](/embed/vext-link) |
-| Aparelho reconhecido no Vext Link | 90 dias | [Vext Link](/embed/vext-link) |
-| Valor a partir do qual o Vext Link pede o código de novo | 50.000 centavos (R\$ 500,00) | [Vext Link](/embed/vext-link) |
