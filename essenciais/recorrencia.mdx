@@ -1,0 +1,115 @@
+---
+title: "Assinaturas e recorrência"
+description: "Como declarar uma cobrança de série, por que a bandeira exige isso, e o que a declaração não faz."
+icon: "repeat"
+---
+
+import Suporte from "/snippets/suporte.mdx";
+
+Uma assinatura é uma sequência de cobranças no mesmo cartão, sem o comprador na tela. Quem cobra
+assim tem duas obrigações que uma venda avulsa não tem: **guardar o cartão antes** e **declarar cada
+cobrança como parte da série**.
+
+## Guardar o cartão
+
+O cofre se enche de duas formas, e a melhor depende de haver ou não uma primeira venda:
+
+<CardGroup cols={2}>
+  <Card title="Há uma primeira cobrança" icon="credit-card">
+    Mande `save_card: true` nela. O cartão entra no cofre com uma **autorização real** no histórico,
+    e é uma chamada a menos.
+  </Card>
+  <Card title="Não há (trial, cobrança adiada)" icon="vault" href="/api-reference/cartoes/guardar">
+    `POST /v1/cards` guarda sem cobrar. Passa por uma verificação sem valor, que é menos que uma
+    autorização.
+  </Card>
+</CardGroup>
+
+O `pm_` que volta é o que cobra depois, em `card.id`. Ver
+[Cofre de cartões](/essenciais/cofre-de-cartoes).
+
+## Declarar a série
+
+O campo é `recurrence`, em `POST /v1/charges`, e ele só existe no cartão.
+
+```json Primeira cobrança
+{
+  "amount": 4990,
+  "payment_method": "credit_card",
+  "items": [{ "description": "Plano mensal", "quantity": 1, "amount": 4990 }],
+  "customer": { "name": "Ana P Souza", "email": "ana@exemplo.com.br", "document": "11144477735", "phone_ddd": "11", "phone_number": "987654321" },
+  "card": { "id": "pm_01k1y6r6m6q2x0p3d9v4t7c8n2", "installments": 1 },
+  "recurrence": { "cycle": "first" }
+}
+```
+
+Guarde o `id` (`ch_…`) que voltou. Toda cobrança seguinte aponta para ele:
+
+```json Cobranças seguintes
+{
+  "recurrence": {
+    "cycle": "subsequent",
+    "origin_charge_id": "ch_01k1y6r6m6q2x0p3d9v4t7c8n2"
+  }
+}
+```
+
+<Warning>
+  **Omitir `recurrence` não dá erro nenhum** — e é exatamente por isso que ela está documentada
+  aqui. A cobrança é aceita, a venda acontece, e a falta vira multa de bandeira semanas depois.
+  Mastercard, Visa e Elo exigem a declaração em transações iniciadas pelo lojista.
+</Warning>
+
+## A série reinicia mais vezes do que parece
+
+Trocar o cartão, trocar o meio de pagamento ou **mudar o valor** encerra a série. A cobrança
+seguinte a qualquer uma dessas mudanças é uma nova `first`, e é o `ch_` dela que as próximas passam
+a apontar. Continuar apontando para a origem antiga declara uma série que a bandeira não reconhece
+mais.
+
+Na prática: um reajuste de plano abre série nova. Um upgrade também.
+
+## Uma parcela, sempre
+
+`installments` aceita apenas `1` numa cobrança recorrente. A bandeira não parcela uma assinatura —
+quem quer dividi-la cobra mais vezes, não uma vez em doze. Mandar outro número volta `422`.
+
+## O que a declaração NÃO faz
+
+Não devolve a transferência de responsabilidade.
+
+Declarar a recorrência é conformidade: evita multa. A proteção numa contestação por fraude continua
+vindo da [autenticação do portador](/essenciais/autenticacao-do-portador), e um cartão guardado não
+consegue autenticar — o desafio precisa do número em claro.
+
+O caminho que preserva a proteção é **autenticar a primeira cobrança**, com o comprador na tela e o
+cartão digitado, e deixar as seguintes correrem declaradas com o `pm_`. Numa loja que exige
+autenticação, cobrar a primeira já com `card.id` e `recurrence` funciona — e corre sem liability
+shift, por sua conta.
+
+## O que você recebe de volta
+
+`card.recurrence_cycle` traz o ciclo declarado, e `null` em toda cobrança fora de uma série. É por
+ele que você responde "quais destas cobranças foram de assinatura?" ao conciliar.
+
+## O que dá errado
+
+| `code` | HTTP | O sintoma |
+| --- | --- | --- |
+| `validation_failed` | `422` | `subsequent` sem `origin_charge_id`, ou `installments` diferente de 1 |
+| `validation_failed` | `422` | A origem não é uma cobrança desta conta, ou não tem identificador de recorrência — use a primeira **aprovada no cartão** |
+| `validation_failed` | `422` | `recurrence` numa cobrança PIX |
+| `card_declined` | `402` | O cartão recusou. A cobrança existe, com status `failed` — e a assinatura precisa de uma política de retentativa |
+
+## Veja também
+
+<CardGroup cols={2}>
+  <Card title="Cofre de cartões" icon="vault" href="/essenciais/cofre-de-cartoes">
+    Guardar o cartão e cobrar de novo sem pedir nada ao comprador.
+  </Card>
+  <Card title="Autenticação do portador" icon="shield-check" href="/essenciais/autenticacao-do-portador">
+    Por que o cofre e o 3DS não convivem, e o que isso custa numa assinatura.
+  </Card>
+</CardGroup>
+
+<Suporte />

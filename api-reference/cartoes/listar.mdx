@@ -13,8 +13,9 @@ openapi: "/api-reference/openapi.yaml GET /v1/cards"
 </Note>
 
 <Note>
-  Um cartão entra no cofre como efeito de uma venda aprovada com `save_card` — e é por isso que não
-  existe `POST /v1/cards`. Cartão guardado é cartão que já passou por um emissor, e essa regra é o
-  que sustenta o pagamento de um clique. Como pedir a guarda está em
-  [Cobrança no cartão](/essenciais/cartao).
+  Um cartão entra no cofre de duas formas. Como efeito de uma venda aprovada com `save_card` — e
+  aí ele traz junto a prova de que passou por um emissor de verdade — ou por
+  [`POST /v1/cards`](/api-reference/cartoes/guardar), que o guarda sem cobrar e traz apenas uma
+  verificação sem valor. Prefira a primeira sempre que houver uma primeira venda. Como pedir a
+  guarda na venda está em [Cobrança no cartão](/essenciais/cartao).
 </Note>

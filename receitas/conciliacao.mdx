@@ -125,10 +125,27 @@ Pare por `has_more`, não por página vazia. E respeite a cota de leitura — ve
 
 | Campo | O que é |
 | --- | --- |
-| `amount` | O que o comprador pagou |
-| `platform_fee` | A nossa taxa |
-| `net_amount` | O que fica com o vendedor (`amount - platform_fee`) |
+| `amount` | O que o comprador pagou. No cartão parcelado, já com o juro |
+| `card.interest` | O juro do parcelamento, pago pelo comprador. `0` no Pix e à vista |
+| `platform_fee` | A nossa taxa, sobre o **preço do produto** (`amount − interest`) |
+| `net_amount` | O que fica com o vendedor |
 | `refunded_amount` | Quanto já voltou ao comprador, acumulado |
+
+<Warning>
+  **Aqui é onde a conciliação erra.** `net_amount` **não** é `amount − platform_fee`: no cartão
+  parcelado essa conta sobra, e a diferença é o juro — que está dentro do `amount` porque o comprador
+  o pagou, mas não é receita de ninguém.
+
+  A identidade que fecha é:
+
+  ```
+  amount = net_amount + platform_fee + card.interest + co-produção
+  ```
+
+  No Pix e no cartão à vista o juro é zero e as duas contas coincidem. Uma conciliação escrita só
+  contra Pix passa a divergir no dia da primeira venda parcelada, e a diferença tem a cara de erro de
+  taxa. Ver [Taxas e liquidação](/essenciais/taxas-e-liquidacao).
+</Warning>
 
 <Note>
   `platform_fee` é **congelada na criação**. Ela reflete o contrato que valia quando a venda

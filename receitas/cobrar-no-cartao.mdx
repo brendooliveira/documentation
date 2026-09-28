@@ -1,0 +1,286 @@
+---
+title: "Cobrar no cartão de ponta a ponta"
+sidebarTitle: "Cobrar no cartão"
+description: "Três passos com o vext.js, e o código do formulário pronto para copiar."
+icon: "credit-card"
+---
+
+import AvisoCentavos from "/snippets/aviso-centavos.mdx";
+import Suporte from "/snippets/suporte.mdx";
+
+Cobrar no cartão são **duas chamadas por venda**: o `vext.js` troca os dados do cartão por um token
+no navegador, e o seu servidor cobra com esse token.
+
+```
+navegador ──(vext.js)──▶ token
+    │
+    └──(token)──▶ seu servidor ──▶ POST /v1/charges ──▶ cobranca criada
+```
+
+<Note>
+  **O número do cartão nunca passa pelo seu servidor nem pelos nossos.** Quem o troca por um token é
+  o `vext.js`, no navegador. É isso que mantém a sua aplicação fora do escopo de PCI — e é o motivo
+  de nenhum endpoint nosso aceitar `number` ou `cvv` (mandá-los devolve `422`).
+</Note>
+
+<AvisoCentavos />
+
+<Steps>
+
+<Step title="Crie uma chave publicável">
+
+No painel, em **Desenvolvedores → Navegador**. Ela começa com `pk_` e é a única credencial que pode
+ir para o navegador.
+
+Cadastre os **domínios** das suas páginas de pagamento. A chave é pública por natureza — fica no
+código-fonte de uma página que qualquer um abre —, então a proteção dela não é o segredo: é a lista
+de domínios. Sem ela, copiar a chave do seu HTML bastaria para tokenizar cartão em nome da sua loja
+de outro site.
+
+<Warning>
+  A chave **secreta** (`sk_`) nunca vai para o navegador. Se você colar uma `sk_` no lugar da `pk_`,
+  o `vext.js` recusa na hora e diz isso — mas se ela já chegou ao HTML, revogue-a no painel: quem
+  abriu a página tem o poder de cobrar em seu nome.
+</Warning>
+
+</Step>
+
+<Step title="Troque o cartão por um token">
+
+Uma tag e uma função. Sem npm, sem build, sem dependência.
+
+```html Formulário completo
+<script src="https://api.usevext.com/v1/vext.js"></script>
+
+<form id="pagamento">
+  <input name="number" inputmode="numeric" autocomplete="cc-number" placeholder="Número do cartão" />
+  <input name="holder_name" autocomplete="cc-name" placeholder="Nome impresso no cartão" />
+  <input name="exp_month" inputmode="numeric" autocomplete="cc-exp-month" placeholder="MM" />
+  <input name="exp_year" inputmode="numeric" autocomplete="cc-exp-year" placeholder="AAAA" />
+  <input name="cvv" inputmode="numeric" autocomplete="cc-csc" placeholder="CVV" />
+  <button type="submit">Pagar</button>
+</form>
+
+<script>
+  const vext = Vext('pk_live_SUA_CHAVE_PUBLICAVEL');
+
+  document.getElementById('pagamento').addEventListener('submit', async (evento) => {
+    evento.preventDefault();
+
+    const campos = new FormData(evento.target);
+
+    try {
+      const { token, brand, last_four } = await vext.createToken({
+        number: campos.get('number'),
+        holder_name: campos.get('holder_name'),
+        exp_month: campos.get('exp_month'),
+        exp_year: campos.get('exp_year'),
+        cvv: campos.get('cvv'),
+      });
+
+      // Daqui em diante só o token viaja. Mande-o ao SEU servidor.
+      await fetch('/api/pagar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token }),
+      });
+    } catch (erro) {
+      // `erro.message` pode ser mostrada ao comprador. `erro.code` é o que
+      // o seu código deve tratar.
+      mostrarErro(erro.message);
+    }
+  });
+</script>
+```
+
+Isso é tudo. A máscara do número, a conversão de mês e ano para número e a mensagem de erro segura
+para mostrar ao comprador já vêm resolvidas.
+
+<Warning>
+  **Chame `createToken()` no envio do formulário, nunca na abertura da página.** O token vale cerca
+  de **um minuto** e serve uma vez só. Criado cedo, ele morre enquanto o comprador termina de
+  digitar — e o erro aparece depois, na cobrança, longe da causa.
+</Warning>
+
+Os códigos de erro, quando você quiser tratá-los um a um:
+
+| `code` | O que houve |
+| --- | --- |
+| `invalid_card` | O comprador errou algum dado. Peça para conferir |
+| `invalid_publishable_key` | Sua chave, ou o domínio desta página, não conferem. É problema seu, não dele |
+| `card_unavailable` | Esta loja não pode cobrar no cartão agora |
+| `network_error` | Conexão. Vale oferecer "tentar de novo" |
+| `tokenization_failed` | Não conseguimos validar o cartão. Tente de novo em instantes |
+
+</Step>
+
+<Step title="Cobre, no seu servidor">
+
+O corpo mínimo. `description` no lugar de `items`, e nenhum campo de 3DS.
+
+<CodeGroup>
+
+```php PHP
+$resposta = Http::withToken(config('services.vext.key'))
+    ->withHeaders(['Idempotency-Key' => (string) Str::uuid()])
+    ->post('https://api.usevext.com/v1/charges', [
+        'amount' => 10000,              // R$ 100,00 em centavos
+        'payment_method' => 'credit_card',
+        'description' => 'Curso de Vue 3',
+        'reference' => "pedido-{$pedido->id}",
+        'customer_ip' => $request->ip(),
+        'customer' => [
+            'name' => 'Ana P Souza',
+            'email' => 'ana@exemplo.com.br',
+            'document' => '11144477735',
+            'phone_ddd' => '11',
+            'phone_number' => '987654321',
+        ],
+        'card' => [
+            'token' => $request->input('token'),   // veio do navegador
+            'installments' => 1,
+            'holder_name' => 'ANA P SOUZA',
+        ],
+    ]);
+```
+
+```js Node
+const resposta = await fetch('https://api.usevext.com/v1/charges', {
+  method: 'POST',
+  headers: {
+    Authorization: `Bearer ${process.env.VEXT_KEY}`,
+    'Content-Type': 'application/json',
+    'Idempotency-Key': crypto.randomUUID(),
+  },
+  body: JSON.stringify({
+    amount: 10000,
+    payment_method: 'credit_card',
+    description: 'Curso de Vue 3',
+    reference: `pedido-${pedido.id}`,
+    customer: {
+      name: 'Ana P Souza',
+      email: 'ana@exemplo.com.br',
+      document: '11144477735',
+      phone_ddd: '11',
+      phone_number: '987654321',
+    },
+    card: { token, installments: 1, holder_name: 'ANA P SOUZA' },
+  }),
+});
+```
+
+```python Python
+resposta = requests.post(
+    "https://api.usevext.com/v1/charges",
+    headers={
+        "Authorization": f"Bearer {VEXT_KEY}",
+        "Idempotency-Key": str(uuid.uuid4()),
+    },
+    json={
+        "amount": 10000,
+        "payment_method": "credit_card",
+        "description": "Curso de Vue 3",
+        "reference": f"pedido-{pedido.id}",
+        "customer": {
+            "name": "Ana P Souza",
+            "email": "ana@exemplo.com.br",
+            "document": "11144477735",
+            "phone_ddd": "11",
+            "phone_number": "987654321",
+        },
+        "card": {"token": token, "installments": 1, "holder_name": "ANA P SOUZA"},
+    },
+)
+```
+
+</CodeGroup>
+
+É isso. `201` e a venda está feita.
+
+</Step>
+
+</Steps>
+
+## A resposta, e os três desfechos
+
+| HTTP | `status` | O que fazer |
+| --- | --- | --- |
+| `201` | `paid` | Libere o produto. O webhook [`charge.paid`](/api-reference/webhooks/charge-paid) confirma |
+| `201` | `in_analysis` | **Não libere ainda.** A análise de fraude segurou; o desfecho vem por webhook |
+| `402` | `failed` | A operadora recusou. A cobrança **existe** — leia abaixo |
+
+<Warning>
+  **Um `402` não é um erro de validação: a cobrança foi criada.** O `ch_` está em
+  `error.details.charge_id` — grave-o junto do pedido. Ele aparece em `GET /v1/charges`, conta na sua
+  taxa de aprovação e é por ele que o suporte encontra a tentativa. Jogar a resposta fora deixa você
+  sem nada para mostrar quando o comprador jurar que tentou pagar.
+
+  Um `422`, sim, significa que **nada** foi criado.
+</Warning>
+
+A `message` do `402` é nossa e pode ser mostrada ao comprador. O `decline_code` é da operadora e
+serve ao seu time entender o padrão das recusas — não vire texto na tela.
+
+## Melhorando a aprovação
+
+Estes três campos são opcionais e cada um sobe a aprovação. Nenhum deles é obrigatório para a venda
+acontecer, e é por isso que eles não estão no passo 3:
+
+<AccordionGroup>
+
+<Accordion title="Endereço de cobrança — dois campos bastam">
+O antifraude reprova bem mais sem endereço, e é ele que a bandeira compara com o cadastro do portador
+numa contestação. Mas você não precisa dos seis campos: mande **CEP e número**, e nós completamos rua,
+bairro, cidade e UF.
+
+```json
+"card": {
+  "token": "token_...",
+  "installments": 1,
+  "holder_name": "ANA P SOUZA",
+  "billing_address": { "zip_code": "01310100", "number": "1000" }
+}
+```
+
+Mandar os seis continua sendo o melhor: não depende da nossa busca de CEP responder.
+</Accordion>
+
+<Accordion title="Parcelas — consulte a grade antes de mostrar">
+A grade muda por bandeira e por valor, e quem a calcula somos nós. Peça em
+[`GET /v1/installments`](/api-reference/cobrancas/parcelas) e mostre ao comprador exatamente os
+valores que vieram de lá. O juro é cobrado **dele** e soma ao total; o `amount` da cobrança continua
+sendo o preço do seu produto.
+
+A mesma rota responde a pergunta inversa: com `net_amount`, quanto cobrar para você receber um valor
+cheio.
+</Accordion>
+
+<Accordion title="`customer_ip` — o IP de quem compra">
+Quem abre a conexão conosco é o seu servidor. Sem este campo, é o endereço **dele** que fica
+gravado, e o "Local" da venda aponta para o seu datacenter em toda cobrança. Atrás de CDN ou proxy,
+leia o IP do cabeçalho encaminhado.
+</Accordion>
+
+</AccordionGroup>
+
+## Autenticação do portador: opcional
+
+Você percebeu que o 3DS não apareceu em nenhum passo. Ele é **opcional nesta API**, e o padrão é não
+autenticar — o interruptor do painel governa os checkouts hospedados por nós, não esta porta.
+
+O que isso custa: sem autenticação, uma contestação por "não fui eu" sai do seu saldo. Com ela,
+responde o banco emissor. Se o seu produto tem risco de fraude, vale implementar — é um passo a mais
+no navegador, e está em [Autenticação do portador](/essenciais/autenticacao-do-portador).
+
+## Veja também
+
+<CardGroup cols={2}>
+  <Card title="Cofre de cartões" icon="vault" href="/essenciais/cofre-de-cartoes">
+    Guardar o cartão e cobrar de novo sem pedir nada ao comprador.
+  </Card>
+  <Card title="Assinaturas" icon="repeat" href="/essenciais/recorrencia">
+    Cobrar em série, e o que a bandeira exige que você declare.
+  </Card>
+</CardGroup>
+
+<Suporte />

@@ -5,8 +5,48 @@ icon: "table"
 openapi: "/api-reference/openapi.yaml GET /v1/installments"
 ---
 
-<Note>
-  A grade vem bandeira por bandeira porque a bandeira só é conhecida quando o comprador digita os
-  seis primeiros dígitos. Mostre a chave `default` antes disso — ela é o pior caso, então o preço
-  nunca sobe depois. Ver [Cobrança no cartão](/essenciais/cartao).
-</Note>
+## As duas perguntas
+
+A rota responde nos dois sentidos, e você escolhe pelo parâmetro:
+
+| Você manda | A pergunta | A resposta está em |
+| --- | --- | --- |
+| `amount=10000` | "cobro R$ 100,00 — recebo quanto?" | `net_amount` |
+| `net_amount=10000` | "quero receber R$ 100,00 — cobro quanto?" | `amount` |
+
+A segunda existe para que você não precise refazer a nossa conta de taxa do seu lado: duas
+implementações da mesma conta divergem no dia em que a taxa mudar de forma.
+
+<Warning>
+  E ela **não** é a taxa somada ao valor. Acrescentar `5,99%` sobre R$ 100,00 dá R$ 105,99 — e o que
+  sobra de R$ 105,99 depois de descontada a taxa é R$ 97,65, não cem. A conta certa é
+  `teto((líquido + fixo) / (1 − percentual))`, e o arredondamento é sempre em desfavor da
+  plataforma: você nunca recebe menos do que pediu.
+</Warning>
+
+## Por que a grade vem por bandeira
+
+Porque o preço muda com ela, e a bandeira só é conhecida quando o comprador digita os seis primeiros
+dígitos.
+
+Mostre a chave `default` antes disso: ela é o **pior caso**, então o preço nunca sobe depois de o
+comprador ver o primeiro número. Quando o [`vext.js`](/api-reference/cartao/vext-js) devolver
+`brand`, troque para a chave daquela bandeira.
+
+## `net_cents` é igual em todas as linhas
+
+E isso é a informação, não uma redundância: o juro do parcelamento é cobrado **do comprador** e sobe
+o `total_cents`, mas a taxa incide sobre o preço do produto. Oferecer 12x não lhe custa um centavo a
+mais que oferecer 1x.
+
+O modelo inteiro — sobre o que a taxa incide, o que é a antecipação e quando o dinheiro cai — está em
+[Taxas e liquidação](/essenciais/taxas-e-liquidacao).
+
+## Quando não há grade
+
+`available: false`, e `unavailable_reason` diz por quê. Trate por ele, nunca pela `message`.
+
+Os seis primeiros motivos são configuração, e cada um tem dono diferente: a plataforma, a conta que
+atende a sua loja, o interruptor da sua conta, o status do seu cadastro, a credencial e o seu
+contrato de taxa. `amount_below_minimum` é outra coisa — o cartão está de pé, o que não cabe é
+**aquele valor**.

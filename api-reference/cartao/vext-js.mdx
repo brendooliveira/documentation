@@ -1,0 +1,75 @@
+---
+title: "A biblioteca vext.js"
+sidebarTitle: "vext.js"
+description: "Uma tag e uma função: o navegador troca os dados do cartão por um token."
+icon: "code"
+openapi: "/api-reference/openapi.yaml GET /v1/vext.js"
+---
+
+## Como usar
+
+```html
+<script src="https://api.usevext.com/v1/vext.js"></script>
+
+<script>
+  const vext = Vext('pk_live_SUA_CHAVE_PUBLICAVEL');
+
+  const { token, brand, last_four } = await vext.createToken({
+    number: '4000000000000010',
+    holder_name: 'ANA P SOUZA',
+    exp_month: 12,
+    exp_year: 2030,
+    cvv: '123',
+  });
+</script>
+```
+
+Sem npm, sem build, sem dependência. O passo a passo completo, com o formulário inteiro, está em
+[Cobrar no cartão](/receitas/cobrar-no-cartao).
+
+<Note>
+  **O número do cartão não passa pelos nossos servidores.** A biblioteca o envia do navegador direto
+  à adquirente. É isso que mantém a sua aplicação e a nossa fora do escopo de PCI — e é por isso que
+  a tokenização não é um endpoint nosso que recebe `number`.
+</Note>
+
+## `createToken(card)`
+
+| Campo | Tipo | Observação |
+| --- | --- | --- |
+| `number` | string | Com ou sem máscara — limpamos |
+| `holder_name` | string | Sem acento, até 64 caracteres |
+| `exp_month` | number \| string | `1` a `12`. Convertemos strings |
+| `exp_year` | number \| string | `2030` ou `30` |
+| `cvv` | string | 3 ou 4 dígitos, conforme a bandeira |
+
+Devolve `{ token, brand, last_four }`. `brand` e `last_four` servem à sua tela de confirmação;
+`token` é o que vai em `card.token` na [criação da cobrança](/api-reference/cobrancas/criar).
+
+<Warning>
+  **Chame no envio do formulário, nunca na abertura da página.** O token vale cerca de um minuto e
+  serve uma vez só.
+</Warning>
+
+## Erros
+
+A biblioteca lança `VextError` com `message` e `code`. A `message` é sempre uma frase que **pode**
+ser mostrada ao comprador — nunca repassamos a mensagem da adquirente, que diz qual campo do cartão
+foi recusado (num cartão roubado, isso ajuda quem o roubou).
+
+| `code` | O que houve |
+| --- | --- |
+| `invalid_card` | O comprador errou algum dado |
+| `invalid_publishable_key` | A chave, ou o domínio desta página, não conferem |
+| `card_unavailable` | Esta loja não pode cobrar no cartão agora |
+| `network_error` | Conexão |
+| `tokenization_failed` | Não conseguimos validar o cartão |
+
+## Sobre a tag
+
+O nome do arquivo é fixo e não tem hash: é o único endereço nosso que você escreve à mão no seu HTML.
+O cache é de cinco minutos, de propósito — é o que nos permite corrigir um defeito sem pedir a
+ninguém que limpe o cache do navegador.
+
+Se a sua página tem **CSP**, libere `script-src https://api.usevext.com` e `connect-src` para o
+mesmo domínio.

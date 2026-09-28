@@ -1,0 +1,75 @@
+---
+title: "Cobrança"
+description: "Campo a campo do objeto que toda rota de cobrança devolve — e que chega nos webhooks."
+icon: "receipt"
+openapi-schema: "/api-reference/openapi.yaml Charge"
+---
+
+É o objeto central da API. Volta na criação, na consulta, na listagem e **dentro de todo webhook de
+cobrança** — escrever o seu código contra ele uma vez resolve as quatro.
+
+<Note>
+  **Todo campo desta lista está sempre presente.** Os anuláveis vêm `null`, nunca ausentes. Marcar
+  como opcional o que nunca falta obrigaria você a testar a existência de uma chave que sempre
+  existe.
+
+  Isso vale para `pix` e `card` também: numa cobrança de cartão o objeto `pix` vem com os membros
+  nulos, e vice-versa. O seu código lê `charge.card.brand` sem checar se `card` existe.
+</Note>
+
+## O que NÃO está aqui
+
+E não vai estar, de propósito:
+
+- **Os seis primeiros dígitos do cartão** (o BIN). Somados aos quatro últimos, são material de
+  correlação que você não precisa.
+- **O código de retorno da adquirente.** Ele sai numa recusa, em `error.details.decline_code`, onde
+  quem lê é o seu servidor.
+- **A nota do antifraude.** Numa resposta pública ela seria um oráculo de risco para quem testa
+  cartão em lote.
+- **As referências da Pagar.me.** O `id` (`ch_…`) é o nosso, e é o único que você precisa.
+
+## Os quatro valores, e a pegadinha entre eles
+
+| Campo | O que é |
+| --- | --- |
+| `amount` | **O que o comprador paga.** No parcelado, já inclui o juro |
+| `card.interest` | O juro do parcelamento, pago por ele. `0` no Pix e à vista |
+| `platform_fee` | A nossa taxa, calculada sobre o **preço do produto** |
+| `net_amount` | O que sobra para você |
+
+<Warning>
+  **`net_amount` não é `amount − platform_fee`.** Essa conta dá um número maior, e a diferença é o
+  juro: ele está dentro do `amount` porque o comprador o pagou, mas não é receita de ninguém aqui —
+  atravessa até o arranjo de pagamento.
+
+  A identidade que fecha, e que o banco confere em toda cobrança:
+
+  ```
+  amount = net_amount + platform_fee + interest + co-produção
+  ```
+
+  No Pix e no cartão à vista o juro é zero, e aí `amount − platform_fee` fecha. É por isso que quem
+  integrou só Pix nunca tropeçou nisso.
+</Warning>
+
+E há uma assimetria entre o que entra e o que sai: **no `POST` você manda o preço do produto**, e aqui
+volta o total. O preço do produto, de volta, é `amount − card.interest`. Ver
+[Taxas e liquidação](/essenciais/taxas-e-liquidacao).
+
+<Warning>
+  `authorized_at` não é `paid_at`. A autorização reserva o limite no cartão; a captura é o que move
+  o dinheiro. Quem confirma a venda para o seu sistema continua sendo o webhook
+  [`charge.paid`](/api-reference/webhooks/charge-paid).
+</Warning>
+
+## Veja também
+
+<CardGroup cols={2}>
+  <Card title="Ciclo de vida" icon="workflow" href="/essenciais/ciclo-de-vida-da-cobranca">
+    Os dez estados do `status` e as transições possíveis.
+  </Card>
+  <Card title="Taxas e liquidação" icon="percent" href="/essenciais/taxas-e-liquidacao">
+    Como a taxa incide e quando o dinheiro cai.
+  </Card>
+</CardGroup>

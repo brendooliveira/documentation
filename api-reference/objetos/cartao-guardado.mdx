@@ -1,0 +1,45 @@
+---
+title: "Cartão guardado"
+description: "Campo a campo do cartão no cofre — o pm_ que cobra de novo sem pedir nada ao comprador."
+icon: "vault"
+openapi-schema: "/api-reference/openapi.yaml SavedCard"
+---
+
+O que as rotas de `/v1/cards` devolvem. O `id` (`pm_…`) é o que vai em `card.id` numa
+[cobrança](/api-reference/cobrancas/criar), e é a única referência ao cartão que sai da nossa casa.
+
+<Note>
+  **Todo campo está sempre presente.**
+</Note>
+
+## O que NÃO está aqui
+
+As referências da Pagar.me que de fato cobram, e os seis primeiros dígitos. As primeiras são o
+equivalente ao cartão para quem as tem — o `pm_` existe justamente para que ninguém precise delas. O
+BIN somado aos quatro últimos é material de correlação.
+
+## `expired` é estado, não ausência
+
+Um cartão vencido **continua na lista**, com `expired: true`. É o que permite você entender por que a
+cobrança de um clique parou de funcionar para aquele comprador, em vez de o cartão simplesmente
+desaparecer.
+
+Ele sai da listagem por padrão: peça `include_expired=1` para vê-lo.
+
+## `last_used_at` e a ordem da lista
+
+Carimbado só **depois** de uma cobrança dar certo. A distinção importa: se o carimbo acontecesse
+antes da chamada ao provedor, um cartão recusado sairia com `last_used_at` de agora — e como a lista
+é ordenada por esse campo, o cartão que acabou de falhar viraria o pré-escolhido da tentativa
+seguinte.
+
+## Veja também
+
+<CardGroup cols={2}>
+  <Card title="Cofre de cartões" icon="vault" href="/essenciais/cofre-de-cartoes">
+    Como um cartão entra, e as duas formas de guardar.
+  </Card>
+  <Card title="Assinaturas" icon="repeat" href="/essenciais/recorrencia">
+    Cobrar em série com o `pm_`, e o que a bandeira exige.
+  </Card>
+</CardGroup>

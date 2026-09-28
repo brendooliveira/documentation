@@ -1,0 +1,23 @@
+---
+title: "Emitir token de autenticação"
+description: "O token que autoriza o navegador a rodar o desafio de autenticação do portador."
+icon: "shield-check"
+openapi: "/api-reference/openapi.yaml POST /v1/three_ds_tokens"
+---
+
+<Warning>
+  Peça o token no **envio** do formulário, nunca na abertura da página. Ele vive cinco minutos;
+  emitido cedo, já estaria morto para quem levou algum tempo preenchendo o endereço — e a falha só
+  aparece depois de o desafio abrir.
+</Warning>
+
+<Note>
+  **Não é idempotente, e isso é deliberado.** Cada tentativa de pagamento precisa de um token novo:
+  devolver o anterior entregaria um já queimado no desafio que falhou. Mandar `Idempotency-Key` não
+  muda nada.
+</Note>
+
+O que o desafio devolve ao seu JavaScript — o identificador da autenticação e o `transStatus` — segue
+em `card.three_ds` na [criação da cobrança](/api-reference/cobrancas/criar). Perdê-lo no caminho
+significa ter incomodado o comprador com um desafio e pagado a contestação assim mesmo. Ver
+[Autenticação do portador](/essenciais/autenticacao-do-portador).

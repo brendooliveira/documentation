@@ -41,18 +41,32 @@
             "pages": ["index", "quickstart"]
           },
           {
+            "group": "Cartão de crédito",
+            "icon": "credit-card",
+            "pages": [
+              "receitas/cobrar-no-cartao",
+              "essenciais/cartao",
+              "essenciais/autenticacao-do-portador",
+              "essenciais/cofre-de-cartoes",
+              "essenciais/recorrencia"
+            ]
+          },
+          {
+            "group": "Pix",
+            "icon": "qr-code",
+            "pages": ["receitas/checkout-pix"]
+          },
+          {
             "group": "Essenciais",
             "icon": "book-open",
             "pages": [
               "essenciais/valores-em-centavos",
+              "essenciais/taxas-e-liquidacao",
               "essenciais/autenticacao",
               "essenciais/idempotencia",
               "essenciais/erros",
               "essenciais/limites-de-taxa",
               "essenciais/ciclo-de-vida-da-cobranca",
-              "essenciais/cartao",
-              "essenciais/autenticacao-do-portador",
-              "essenciais/cofre-de-cartoes",
               "essenciais/estornos",
               "essenciais/saldo"
             ]
@@ -70,7 +84,6 @@
             "group": "Receitas",
             "icon": "route",
             "pages": [
-              "receitas/checkout-pix",
               "receitas/conciliacao",
               "receitas/repetir-com-seguranca",
               "receitas/estorno-parcial"
@@ -86,6 +99,14 @@
             "pages": ["api-reference/introducao"]
           },
           {
+            "group": "Objetos",
+            "pages": [
+              "api-reference/objetos/cobranca",
+              "api-reference/objetos/cartao-guardado",
+              "api-reference/objetos/comprador"
+            ]
+          },
+          {
             "group": "Cobranças",
             "pages": [
               "api-reference/cobrancas/criar",
@@ -96,8 +117,17 @@
             ]
           },
           {
+            "group": "Cartão no navegador",
+            "pages": [
+              "api-reference/cartao/vext-js",
+              "api-reference/cartao/client-config",
+              "api-reference/cartao/three-ds-token"
+            ]
+          },
+          {
             "group": "Cartões",
             "pages": [
+              "api-reference/cartoes/guardar",
               "api-reference/cartoes/listar",
               "api-reference/cartoes/consultar",
               "api-reference/cartoes/remover"

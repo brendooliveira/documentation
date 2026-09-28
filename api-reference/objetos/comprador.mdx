@@ -1,0 +1,56 @@
+---
+title: "Comprador"
+description: "Campo a campo do objeto customer — e por que os cinco campos são obrigatórios."
+icon: "user"
+openapi-schema: "/api-reference/openapi.yaml Customer"
+---
+
+O comprador, como ele **entra** em `POST /v1/charges` e em `POST /v1/cards`. O mesmo formato nas
+duas rotas, de propósito: o mesmo objeto do seu lado serve às duas.
+
+<Warning>
+  **Os cinco campos são obrigatórios, e a exigência não é nossa.** O arranjo de pagamento devolve
+  `200` no pedido e mata a transação quando falta qualquer um deles — você receberia uma cobrança
+  pendente que nunca teve QR Code, sem erro nenhum que explicasse.
+
+  É a armadilha mais cara desta API, e é por isso que recusamos na porta em vez de deixar passar.
+</Warning>
+
+## O documento
+
+Aceita com ou sem pontuação — `111.444.777-35` e `11144477735` dão no mesmo. Guardamos e repassamos
+só os dígitos.
+
+`document_type` é **opcional** e deduzido do tamanho: 11 dígitos é CPF, 14 é CNPJ. Mande-o quando
+quiser ser explícito.
+
+## O telefone
+
+`phone_ddd` e `phone_number` viajam separados porque o arranjo os quer separados. O tipo é deduzido
+do tamanho: 9 dígitos vira celular, 8 vira fixo. Declarar um fixo como celular não dá erro — só
+piora o contato numa cobrança que precise dele.
+
+## Um comprador por loja
+
+O mesmo CPF comprando de duas lojas vira **dois cadastros**. É deliberado: o comprador é da loja, e
+a base de clientes de uma não deve ser dedutível pela outra.
+
+Dentro da sua loja, reencontramos o comprador pelo **documento**; sem documento, pelo e-mail. É o que
+faz o [cofre de cartões](/essenciais/cofre-de-cartoes) achar o cartão que ele deixou na compra
+anterior.
+
+## O que volta
+
+Na resposta de uma cobrança, o `customer` vem **reduzido** — nome, e-mail e o documento mascarado
+(`111.***.***-35`). Você já tem o cadastro completo do seu lado; devolvê-lo inteiro em toda listagem
+só multiplicaria dado pessoal trafegando sem necessidade.
+
+## Não confunda com `customer_ip`
+
+Ele fica **fora** de `customer`, e é de propósito: os campos daqui são o cadastro, reaproveitado
+entre compras. O IP é da **tentativa** — muda a cada uma, e guardá-lo junto do cadastro sugeriria que
+pertence à pessoa.
+
+Mande o IP de **quem está comprando**. Numa integração servidor-a-servidor quem abre a conexão
+conosco é o seu servidor, e sem esse campo é o endereço dele que fica gravado: o "Local" da venda
+apontaria para o seu datacenter em toda cobrança.

@@ -8,40 +8,84 @@ import AvisoCentavos from "/snippets/aviso-centavos.mdx";
 import Suporte from "/snippets/suporte.mdx";
 
 Uma cobrança no cartão nasce de `POST /v1/charges` com `payment_method: "credit_card"` e um objeto
-`card`. O restante da chamada é igual ao PIX — mesmos `amount`, `items`, `customer` e
-`Idempotency-Key`.
+`card`. O restante da chamada é igual ao PIX — mesmos `amount`, `customer` e `Idempotency-Key`.
+
+<Note>
+  Quer o passo a passo com o código do formulário pronto para copiar? Está em
+  [**Cobrar no cartão de ponta a ponta**](/receitas/cobrar-no-cartao). Esta página explica o que cada
+  campo significa; aquela mostra como fazer.
+</Note>
 
 <AvisoCentavos />
 
-## A regra
+## O mínimo
 
-O número do cartão não entra nessa chamada. O que entra é um `token` de uso único, produzido no
-navegador pela biblioteca de tokenização da Pagar.me, ou o `id` de um
-[cartão guardado](/essenciais/cofre-de-cartoes).
+Isto cobra. Não falta nada.
 
-```json Cobrança de R$ 100,00 em 3x
+```json Cobrança de R$ 100,00 à vista
 {
   "amount": 10000,
   "payment_method": "credit_card",
-  "description": "Pedido 1042",
-  "reference": "pedido-1042",
-  "customer_ip": "203.0.113.7",
-  "items": [{ "description": "Curso completo", "quantity": 1, "amount": 10000 }],
+  "description": "Curso de Vue 3",
   "card": {
-    "token": "token_...",
-    "installments": 3,
-    "holder_name": "ANA P SOUZA",
-    "billing_address": {
-      "zip_code": "01310100",
-      "street": "Avenida Paulista",
-      "number": "1000",
-      "neighborhood": "Bela Vista",
-      "city": "São Paulo",
-      "state": "SP"
-    }
+    "token": "token_ORP978GFOUoQD58x",
+    "installments": 1,
+    "holder_name": "ANA P SOUZA"
+  },
+  "customer": {
+    "name": "Ana P Souza",
+    "email": "ana@exemplo.com.br",
+    "document": "11144477735",
+    "phone_ddd": "11",
+    "phone_number": "987654321"
   }
 }
 ```
+
+Três coisas que valem saber sobre esse corpo:
+
+- **`items` não aparece.** No cartão, `description` serve no lugar dele — montar um array cuja soma
+  tem de fechar com `amount` para vender uma coisa só é trabalho sem função. No PIX `items` continua
+  obrigatório, porque é o que o comprador lê no aplicativo do banco.
+- **`billing_address` não aparece.** É opcional, e sobe a aprovação. Dois campos bastam: CEP e
+  número — completamos o resto.
+- **Nada de 3DS.** A autenticação do portador é **opcional** nesta API. Ver
+  [Autenticação do portador](/essenciais/autenticacao-do-portador) quando quiser a transferência de
+  responsabilidade.
+
+## O número do cartão não passa por aqui
+
+O que entra em `card` é um `token` de uso único, produzido no **navegador** pelo nosso `vext.js`, ou
+o `id` de um [cartão guardado](/essenciais/cofre-de-cartoes).
+
+Nenhum endpoint desta API aceita `number` ou `cvv` — mandá-los devolve `422`, e não um silêncio. O
+número vai do navegador direto à adquirente: não passa pelo seu servidor nem pelos nossos, e é isso
+que mantém a sua aplicação e a nossa fora do escopo de PCI.
+
+```html
+<script src="https://api.usevext.com/v1/vext.js"></script>
+
+<script>
+  const vext = Vext('pk_live_...');
+
+  // no ENVIO do formulário, nunca na abertura da página
+  const { token } = await vext.createToken({
+    number, holder_name, exp_month, exp_year, cvv,
+  });
+</script>
+```
+
+A chave `pk_` sai do painel, em **Desenvolvedores → Navegador**, e você cadastra nela os domínios
+das suas páginas de pagamento. O passo a passo completo está em
+[Cobrar no cartão](/receitas/cobrar-no-cartao).
+
+<Warning>
+  A chave **secreta** nunca vai para o navegador. O `vext.js` recusa uma `sk_` na hora e diz isso —
+  mas se ela já chegou ao HTML, revogue-a: quem abriu a página tem o poder de cobrar em seu nome.
+</Warning>
+
+O token vale cerca de um minuto e serve uma vez só. É por isso que a tokenização acontece no envio
+do formulário, e não enquanto o comprador digita.
 
 Mandar `card` numa cobrança PIX volta `422`, e omiti-lo numa de cartão também. A dupla
 `payment_method` + `card` anda junta.
@@ -80,8 +124,19 @@ Consulte-a em [`GET /v1/installments`](/api-reference/cobrancas/parcelas) e most
 valores que vieram de lá.
 
 O juro, quando houver, é cobrado **do comprador** e soma ao total. Ele volta em `card.interest`, em
-centavos, e o `amount` da cobrança continua sendo o preço do seu produto — é o que faz a sua
-conciliação fechar sem descobrir a diferença no fim do mês.
+centavos.
+
+<Warning>
+  O `amount` que você **manda** é o preço do produto. O `amount` que **volta** é o que o comprador
+  paga — no parcelado, um número maior, com o juro dentro. O preço do produto, de volta, é
+  `amount − card.interest`.
+
+  E cuidado: `net_amount` **não** é `amount − platform_fee`. A diferença é o juro, que não é receita
+  de ninguém aqui. Ver [Cobrança](/api-reference/objetos/cobranca).
+</Warning>
+
+Consequência que surpreende: **parcelar não lhe custa nada.** O seu líquido é o mesmo em 1x e em 12x.
+Ver [Taxas e liquidação](/essenciais/taxas-e-liquidacao).
 
 ## O que a resposta traz
 
@@ -90,6 +145,9 @@ seu código precise checar a existência do objeto antes de ler um campo.
 
 Numa venda no cartão ele traz bandeira, quatro últimos dígitos, titular, parcelas, juros, o
 resultado da [autenticação do portador](/essenciais/autenticacao-do-portador) e o `authorized_at`.
+
+Campo a campo, com o que é anulável e o que nunca falta, em
+[Cobrança](/api-reference/objetos/cobranca).
 
 <Note>
   `authorized_at` não é `paid_at`. A autorização reserva o limite no cartão; a captura é o que
@@ -103,7 +161,7 @@ resultado da [autenticação do portador](/essenciais/autenticacao-do-portador) 
 | --- | --- | --- |
 | `card_declined` | `402` | A operadora recusou. A cobrança existe, com status `failed` |
 | `validation_failed` | `422` | Falta `installments`, ou `card` veio numa cobrança PIX |
-| `one_click_requires_three_ds` | `403` | Cartão guardado numa loja que exige autenticação do portador |
+| `one_click_requires_three_ds` | `403` | Você pediu `three_d_secure: "required"` num cartão guardado, que não pode autenticar |
 | `card_not_found` | `404` | O `pm_` não existe, ou é de outro comprador |
 | `card_expired` | `422` | O cartão guardado venceu |
 | `card_revoked` | `422` | O cartão guardado foi removido |

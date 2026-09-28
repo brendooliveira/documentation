@@ -1,0 +1,27 @@
+---
+title: "Guardar cartão"
+description: "Guarda um cartão no cofre sem cobrar nada, e devolve o pm_ das cobranças seguintes."
+icon: "vault"
+openapi: "/api-reference/openapi.yaml POST /v1/cards"
+---
+
+<Note>
+  Quando existe uma primeira venda, prefira `save_card: true` nela: é uma chamada a menos, e o
+  cartão entra no cofre com uma **autorização real** no histórico. Esta rota é para os casos em que
+  não há primeira venda ainda — assinatura com teste grátis, cobrança adiada, upsell combinado antes
+  de qualquer cobrança.
+</Note>
+
+O número do cartão não entra aqui. O que entra é o `token` de uso único que o
+[`vext.js`](/api-reference/cartao/vext-js) criou no navegador — o mesmo token de uma cobrança. Ele
+vale cerca de um minuto.
+
+<Warning>
+  Ao guardar, pedimos ao provedor uma **verificação sem valor**: ele consulta a bandeira e o emissor
+  para saber se o cartão existe e pode transacionar, sem tocar no limite do comprador. Não é uma
+  autorização — um cartão guardado por aqui passou por uma consulta, não por uma venda. A diferença
+  aparece na taxa de aprovação da primeira cobrança.
+</Warning>
+
+O mesmo plástico guardado de novo devolve o **mesmo** `pm_`, e não cria um segundo. Ver
+[Cofre de cartões](/essenciais/cofre-de-cartoes).

@@ -98,6 +98,11 @@ tags:
     description: Criação, consulta e estorno de cobranças, no PIX e no cartão.
   - name: Saldo
     description: Quanto o vendedor tem e quanto pode sacar.
+  - name: Cartão no navegador
+    description: |
+      O que o navegador do comprador precisa para virar um formulário de
+      cartão: a credencial de tokenização e o token do desafio de
+      autenticação. O número do cartão nunca passa por esta API.
   - name: Cartões
     description: |
       Os cartões que os compradores deixaram guardados, para cobrar de novo
@@ -107,16 +112,26 @@ paths:
   /v1/charges:
     post:
       tags: [Cobranças]
-      summary: Criar cobrança PIX
+      summary: Criar cobrança
       operationId: createCharge
       description: |
-        Cria uma cobrança PIX com split entre o vendedor e a plataforma. A
-        resposta traz o payload copia-e-cola (`pix.qr_code`) já pronto para
-        exibir ao comprador.
+        Cria uma cobrança com split entre o vendedor e a plataforma, no PIX
+        ou no cartão.
 
-        A imagem do QR **não** é devolvida: ela é derivada do payload na
-        hora de exibir, e mandar um PNG em base64 em toda resposta
-        multiplicaria o corpo por algo que você gera localmente.
+        **No PIX** - o padrão, e o que continua valendo para um corpo sem
+        `payment_method` - a resposta traz o payload copia-e-cola
+        (`pix.qr_code`) já pronto para exibir. A imagem do QR **não** é
+        devolvida: ela é derivada do payload na hora de exibir, e mandar um
+        PNG em base64 em toda resposta multiplicaria o corpo por algo que
+        você gera localmente.
+
+        **No cartão**, mande `payment_method: "credit_card"` e o objeto
+        `card`. O `token` que ele leva é criado no navegador pelo
+        `GET /v1/vext.js`; o `id` vem de um cartão guardado. E atenção à
+        diferença que mais gera
+        chamado: uma recusa de cartão **cria** a cobrança, com status
+        `failed`, e volta `402` com o `ch_` em `error.details.charge_id`. Um
+        `422` é que significa "nada foi criado".
       security:
         - apiKey: [charges:write]
       parameters:
@@ -143,6 +158,60 @@ paths:
                     email: joao@exemplo.com.br
                     document: '11144477735'
                     document_type: CPF
+                    phone_ddd: '11'
+                    phone_number: '987654321'
+              cartao:
+                summary: Cartão, o corpo mínimo
+                description: |
+                  Não falta nada aqui. Sem `items` - `description` serve no
+                  lugar dele no cartão -, sem endereço e sem nenhum campo de
+                  3DS, que é opcional nesta API.
+
+                  O `token` vem do navegador, criado por
+                  `Vext(pk).createToken(...)` - ver `GET /v1/vext.js`. Ele
+                  vale cerca de um minuto.
+                value:
+                  amount: 10000
+                  payment_method: credit_card
+                  description: Curso de Vue 3
+                  reference: pedido-1042
+                  customer_ip: 189.45.12.7
+                  card:
+                    token: token_ORP978GFOUoQD58x
+                    installments: 1
+                    holder_name: ANA P SOUZA
+                  customer:
+                    name: Ana P Souza
+                    email: ana@exemplo.com.br
+                    document: '11144477735'
+                    phone_ddd: '11'
+                    phone_number: '987654321'
+              cartaoCompleto:
+                summary: Cartão, com tudo que melhora a aprovação
+                description: |
+                  Os três opcionais que valem a pena: endereço de cobrança -
+                  aqui em CEP e número, que completamos -, `customer_ip` do
+                  comprador, e a bandeira lida do BIN para precificar o
+                  parcelamento.
+                value:
+                  amount: 10000
+                  payment_method: credit_card
+                  description: Curso de Vue 3
+                  reference: pedido-1042
+                  customer_ip: 189.45.12.7
+                  save_card: true
+                  card:
+                    token: token_ORP978GFOUoQD58x
+                    installments: 3
+                    holder_name: ANA P SOUZA
+                    brand: visa
+                    billing_address:
+                      zip_code: '01310100'
+                      number: '1000'
+                  customer:
+                    name: Ana P Souza
+                    email: ana@exemplo.com.br
+                    document: '11144477735'
                     phone_ddd: '11'
                     phone_number: '987654321'
               comItens:
@@ -512,6 +581,98 @@ paths:
           $ref: '#/components/responses/InternalError'
 
   /v1/cards:
+    post:
+      tags: [Cartões]
+      summary: Guardar cartão sem cobrar
+      operationId: createSavedCard
+      description: |
+        Guarda um cartão no cofre **sem cobrar nada**, e devolve o `pm_` que
+        as cobranças seguintes vão usar em `card.id`.
+
+        É a porta da assinatura com teste grátis, da cobrança adiada e do
+        upsell combinado antes da primeira venda - os casos em que o cartão
+        precisa estar guardado **antes** de existir cobrança. Quando há uma
+        primeira venda, prefira `save_card: true` nela: é uma chamada a
+        menos e o cartão entra no cofre com uma autorização real no
+        histórico.
+
+        O número do cartão **não** entra aqui. O que entra é o `token` de
+        uso único que o `GET /v1/vext.js` criou no navegador - o mesmo token
+        de uma cobrança. Ele vale cerca de um minuto e serve uma vez só.
+
+        Ao guardar, pedimos ao provedor uma **verificação sem valor** (Zero
+        Dollar Auth): ele consulta a bandeira e o emissor para saber se o
+        cartão existe e pode transacionar, sem tocar no limite do
+        comprador. Não é uma autorização - um cartão guardado por aqui
+        passou por uma consulta, não por uma venda.
+
+        Guardar credencial de pagamento sem o comprador ter pedido é
+        problema regulatório antes de ser problema de produto. O
+        consentimento é seu para colher.
+      security:
+        - apiKey: [cards:manage]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSavedCardRequest'
+            examples:
+              assinatura:
+                summary: Cartão para cobrar depois
+                value:
+                  customer:
+                    name: Ana P Souza
+                    email: ana@exemplo.com.br
+                    document: '11144477735'
+                    phone_ddd: '11'
+                    phone_number: '987654321'
+                  card:
+                    token: token_ORP978GFOUoQD58x
+                    holder_name: ANA P SOUZA
+                    billing_address:
+                      zip_code: '01310100'
+                      street: Avenida Paulista
+                      number: '1000'
+                      neighborhood: Bela Vista
+                      city: São Paulo
+                      state: SP
+      responses:
+        '201':
+          description: |
+            Cartão guardado. O mesmo plástico guardado de novo devolve o
+            **mesmo** `pm_` - não cria um segundo.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavedCard'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/IdempotencyConflict'
+        '422':
+          description: |
+            O corpo não passou, o cartão não passou na verificação, ou esta
+            conta não vende no cartão (`card_not_available`). Nenhum cartão
+            é guardado em nenhum desses casos.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '502':
+          $ref: '#/components/responses/ProviderUnavailable'
+
     get:
       tags: [Cartões]
       summary: Listar cartões guardados
@@ -519,9 +680,11 @@ paths:
       description: |
         Os cartões que os seus compradores deixaram guardados.
 
-        Um cartão entra no cofre como **efeito de uma venda aprovada** com
-        `save_card: true` - não existe endpoint para criar um. A regra é a
-        que sustenta o resto: cartão guardado é cartão que já passou.
+        Um cartão entra no cofre de duas formas: como **efeito de uma venda
+        aprovada** com `save_card: true`, ou por `POST /v1/cards`, que o
+        guarda sem cobrar. A primeira traz junto a prova de que o cartão
+        passou numa autorização real; a segunda traz uma verificação sem
+        valor, que é menos.
 
         O que você recebe é o `id` (`pm_…`), a bandeira, os quatro últimos
         dígitos e a validade. As referências que de fato cobram ficam do
@@ -644,6 +807,177 @@ paths:
         '429':
           $ref: '#/components/responses/RateLimited'
 
+  /v1/vext.js:
+    get:
+      tags: [Cartão no navegador]
+      summary: A biblioteca vext.js
+      operationId: getVextScript
+      description: |
+        A biblioteca que troca os dados do cartão por um token, no navegador.
+        Cole a tag e pronto - **não** é para ser consumida por `fetch`.
+
+        ```html
+        <script src="https://api.usevext.com/v1/vext.js"></script>
+        <script>
+          const vext = Vext('pk_live_...');
+          const { token } = await vext.createToken({
+            number, holder_name, exp_month, exp_year, cvv
+          });
+        </script>
+        ```
+
+        Ela existe para que você não precise saber o nome do nosso provedor
+        nem escrever o endereço dele no seu código. **O número do cartão não
+        passa pelos nossos servidores**: vai do navegador direto à
+        adquirente, e é isso que mantém a sua aplicação e a nossa fora do
+        escopo de PCI.
+
+        O nome do arquivo é fixo e não tem hash - é o único endereço nosso que
+        você escreve à mão no seu HTML, e um nome que mudasse a cada deploy
+        quebraria o seu checkout. O cache é curto (cinco minutos) de
+        propósito: é o que nos permite corrigir um defeito sem pedir a
+        ninguém que limpe o cache do navegador.
+
+        Público, sem credencial: a chave entra em cena quando você chama
+        `createToken()`.
+      security: []
+      responses:
+        '200':
+          description: O arquivo JavaScript.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                example: public, max-age=300
+          content:
+            application/javascript:
+              schema:
+                type: string
+        '404':
+          description: |
+            A biblioteca não está publicada nesta instalação. É problema do
+            nosso lado, não da sua chave.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /v1/client_config:
+    get:
+      tags: [Cartão no navegador]
+      summary: Configuração para o navegador
+      operationId: getClientConfig
+      description: |
+        O que o `vext.js` pergunta antes de tokenizar. **Você normalmente não
+        chama esta rota** - a biblioteca o faz por você, uma vez por página.
+
+        Está documentada porque é o que a sua `pk_` alcança, e porque saber o
+        que uma chave pública consegue fazer não deveria exigir ler o nosso
+        código: ela devolve o endereço de tokenização, a chave pública da
+        adquirente desta loja, as bandeiras aceitas e os limites de
+        parcelamento. Não cria cobrança, não lê venda, não move dinheiro.
+
+        Ela **não diz por que** o cartão está indisponível - só que está.
+        Aqui quem pergunta é o navegador de um comprador qualquer, e o motivo
+        entregue a qualquer visitante transformaria o endpoint num painel de
+        status nosso. O motivo está em `GET /v1/installments`, atrás da chave
+        secreta.
+
+        A grade de parcelas com preço também não vem: ela depende do valor, e
+        mora em `GET /v1/installments`, atrás da chave secreta.
+      security:
+        - publishableKey: []
+      responses:
+        '200':
+          description: |
+            A configuração. Com `available: false`, nenhuma credencial vem
+            preenchida.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientConfig'
+        '401':
+          description: Chave publicável ausente, inválida ou revogada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: |
+            O domínio de onde a chamada veio não está na allowlist desta
+            chave. Cadastre-o no painel.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /v1/three_ds_tokens:
+    post:
+      tags: [Cartão no navegador]
+      summary: Emitir token de autenticação
+      operationId: createThreeDsToken
+      description: |
+        O token que autoriza o navegador a rodar o desafio de autenticação do
+        portador contra o servidor da Stone. Sem corpo.
+
+        **POST e não GET**: cada chamada gasta um token de uso único e de
+        prazo curto, e um GET seria pré-buscado por navegador e por
+        antivírus - todos morrendo antes de alguém tentar pagar.
+
+        Peça-o no **envio** do formulário, nunca na abertura da página. Ele
+        vive cinco minutos; emitido cedo, já estaria morto para quem levou
+        algum tempo preenchendo o endereço.
+
+        **Não é idempotente, e isso é deliberado.** Repetir aqui é o
+        comportamento certo: cada tentativa de pagamento precisa de um token
+        novo, e devolver o anterior entregaria um já queimado no desafio que
+        falhou. Mandar `Idempotency-Key` não muda nada.
+
+        O que o desafio devolve ao seu JavaScript - o identificador da
+        autenticação e o status - segue em `card.three_ds` na criação da
+        cobrança.
+      security:
+        - apiKey: [charges:write]
+      responses:
+        '200':
+          description: O token, válido por cinco minutos e para um uso só.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ThreeDsToken'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          description: |
+            Esta conta não autentica o portador. Ao contrário do que a porta
+            do navegador faria, aqui o motivo vem junto - quem lê é o seu
+            servidor, e o motivo é acionável.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                indisponivel:
+                  value:
+                    error:
+                      type: invalid_request_error
+                      code: three_ds_unavailable
+                      message: Esta conta não pode autenticar o portador no momento.
+                      details:
+                        reason: fee_disabled
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/PlatformUnavailable'
+
   /v1/installments:
     get:
       tags: [Cobranças]
@@ -663,13 +997,41 @@ paths:
 
         Esta **diz por que** o cartão está indisponível: quem apresenta a
         chave secreta é o seu servidor, e o motivo é acionável para você.
+
+        Responde às **duas** perguntas do parcelamento. Com `amount`, "cobro
+        isto - recebo quanto?"; com `net_amount`, "quero receber isto -
+        cobro quanto?". A segunda existe para que você não precise refazer a
+        nossa conta de taxa do seu lado: duas implementações da mesma conta
+        divergem no dia em que a taxa mudar de forma.
       security:
         - apiKey: [charges:read]
       parameters:
         - name: amount
           in: query
-          required: true
-          description: O valor a parcelar, em **centavos inteiros**.
+          description: |
+            O valor a parcelar, em **centavos inteiros** - o preço do seu
+            produto. **Excludente com `net_amount`**, e um dos dois é
+            obrigatório: aceitar os dois deixaria para nós a escolha de qual
+            honrar quando eles não combinassem.
+          schema:
+            type: integer
+            minimum: 1
+          example: 10000
+        - name: net_amount
+          in: query
+          description: |
+            Quanto você quer **receber**, em centavos inteiros. A resposta
+            devolve em `amount` o preço de vitrine que produz esse líquido
+            depois da taxa.
+
+            Não é a taxa somada ao valor: acrescentar 5,99% sobre R$ 100,00
+            dá R$ 105,99, e o que sobra de R$ 105,99 depois de descontada a
+            taxa é R$ 97,65 - não cem. A conta certa é
+            `teto((líquido + fixo) / (1 − percentual))`, e o arredondamento
+            é sempre em desfavor da plataforma: você nunca recebe menos que
+            pediu.
+
+            **Excludente com `amount`.**
           schema:
             type: integer
             minimum: 1
@@ -1382,6 +1744,29 @@ components:
         A chave vai no **servidor**. Colocá-la no navegador do comprador a
         entrega a qualquer pessoa que abra a página.
 
+    publishableKey:
+      type: apiKey
+      in: header
+      name: X-Vext-Publishable-Key
+      description: |
+        Chave **publicável**, criada no painel em **Desenvolvedores →
+        Navegador**. É a única credencial que pode ir para o navegador do
+        comprador, e a única que o `vext.js` usa.
+
+        Ela não carrega escopos: o que ela alcança é decidido pela rota, e
+        hoje é uma só - `GET /v1/client_config`. Não cria cobrança, não lê
+        venda, não move dinheiro.
+
+        Sendo pública por natureza - ela fica no código-fonte de uma página
+        que qualquer um abre -, a proteção dela não é o segredo: é a
+        **allowlist de domínios**. Cadastre os domínios das suas páginas de
+        pagamento, e uma chamada de qualquer outra origem é recusada. Sem
+        isso, copiar a chave do seu HTML bastaria para tokenizar cartão em
+        nome da sua loja de outro site.
+
+        Na prática você quase nunca a manda à mão: `Vext('pk_live_...')`
+        cuida disso.
+
 
   parameters:
     ChargeCode:
@@ -1619,8 +2004,13 @@ components:
             - $ref: '#/components/schemas/Cents'
           minimum: 1
           description: |
-            Valor total da cobrança, em **centavos inteiros**. R$ 100,00 =
-            `10000`. Um decimal aqui é recusado com `422`.
+            **O preço do que você está vendendo**, em centavos inteiros.
+            R$ 100,00 = `10000`. Um decimal aqui é recusado com `422`.
+
+            No cartão PARCELADO, o `amount` que volta na resposta é MAIOR
+            que este: o juro é cobrado do comprador e soma ao total. Você
+            manda o preço do produto; nós calculamos o que ele paga. Ver
+            `amount` no objeto `Charge`.
         description:
           type: [string, 'null']
           maxLength: 255
@@ -1702,29 +2092,27 @@ components:
           enum: [automatic, required, off]
           default: automatic
           description: |
-            Quanto de autenticação do portador você está pedindo. É um
-            **pedido**, nunca a decisão.
+            **A autenticação do portador é opcional nesta API, e o padrão é
+            não autenticar.** Você não precisa deste campo para cobrar no
+            cartão.
 
-            A configuração da sua loja é PISO: com o 3DS exigido na conta,
-            um `off` aqui não desliga nada. A assimetria é deliberada - o
-            que se perde ao desligar não é uma preferência, é o liability
-            shift numa contestação.
+            Mande `required` quando quiser autenticar: a cobrança passa a
+            exigir `card.three_ds`, e você roda o desafio no navegador antes
+            de cobrar - ver `POST /v1/three_ds_tokens`. É o caminho de quem
+            quer a **transferência de responsabilidade**: sem autenticação,
+            uma contestação por "não fui eu" sai do seu saldo; com ela,
+            responde o banco emissor.
 
-            `required` escala por cobrança, e serve a quem conhece o
-            próprio risco melhor que a configuração da conta: um pedido de
-            valor alto, um comprador novo, um endereço que não bate.
+            `automatic` (o padrão) e `off` fazem a mesma coisa hoje: não
+            autenticam. `off` existe para quem já o escreveu no código um dia
+            e não deve ver a cobrança quebrar por uma simplificação nossa.
 
-            `automatic` pode escalar sozinho **acima de um piso de valor**
-            definido pela plataforma. O piso costuma vir desligado; quando
-            estiver ligado, uma venda a partir dele passa a exigir os
-            identificadores de autenticação. `off` é a forma de recusar
-            esse piso — e **só ele**: a configuração da sua conta continua
-            sendo o chão, e um `off` não a alcança.
-
-            Como o desafio roda no NAVEGADOR, quem cobra servidor a
-            servidor e não consegue produzir `three_ds_transaction_id`
-            deve mandar `off` explicitamente em vez de contar com o
-            padrão.
+            O interruptor de 3DS da sua conta, no painel, **não vale aqui** -
+            ele governa os checkouts hospedados por nós, onde somos nós que
+            montamos a tela e podemos pedir o desafio ao comprador. Nesta API
+            quem monta a tela é você, e exigir um identificador que só o
+            navegador produz devolveria um `422` impossível de resolver a
+            quem cobra de um servidor.
         save_card:
           type: boolean
           default: false
@@ -1743,6 +2131,74 @@ components:
             Guardar credencial de pagamento sem o comprador ter pedido é
             problema regulatório antes de ser problema de produto. O
             consentimento é seu para colher.
+        recurrence:
+          type: [object, 'null']
+          description: |
+            **Declare aqui quando esta cobrança é parte de uma assinatura.**
+
+            Só no cartão; num PIX é recusado com `422`. E `installments`
+            passa a aceitar **apenas 1**: a bandeira não parcela uma
+            cobrança recorrente - quem quer dividir uma assinatura cobra
+            mais vezes, não uma vez em doze.
+
+            Omitir o campo numa cobrança de série **não dá erro nenhum**, e é
+            justamente o problema: a Pagar.me aceita o pedido, e a falta vira
+            multa de bandeira semanas depois. Mastercard, Visa e Elo exigem a
+            declaração.
+
+            <Warning>
+            Declarar recorrência **não** devolve o liability shift. Ela é
+            conformidade de bandeira - evita multa, não evita contestação. A
+            proteção continua vindo da autenticação do portador, e por isso o
+            caminho seguro é **autenticar a primeira cobrança** (com o
+            comprador na tela, sem cartão guardado) e deixar as seguintes
+            correrem declaradas.
+
+            Numa loja que exige 3DS, uma cobrança com `card.id` e
+            `recurrence` **passa** em vez de levar `403
+            one_click_requires_three_ds` - e corre sem transferência de
+            responsabilidade. É uma escolha sua.
+            </Warning>
+          required: [cycle]
+          properties:
+            cycle:
+              type: string
+              enum: [first, subsequent]
+              description: |
+                `first` na primeira cobrança da série; `subsequent` em todas
+                as seguintes.
+
+                A série **reinicia** quando o cartão, o meio de pagamento ou
+                o valor mudam: a cobrança seguinte a qualquer uma dessas
+                mudanças é uma nova `first`, e é dela que as próximas passam
+                a ser origem. Continuar apontando para a origem antiga
+                declara uma série que a bandeira não reconhece mais.
+            model:
+              type: string
+              enum: [subscription, standing_order, instalment]
+              default: subscription
+              description: |
+                `subscription` é a assinatura de valor e frequência fixos -
+                o caso comum, e o padrão. `standing_order` é a ordem
+                permanente de valor variável. `instalment` é a compra
+                dividida em cobranças ao longo do tempo, que **não** é o
+                parcelamento no cartão (ali a bandeira divide uma única
+                autorização).
+            origin_charge_id:
+              type: [string, 'null']
+              description: |
+                O `ch_` da **primeira cobrança aprovada** da série.
+                Obrigatório com `cycle: "subsequent"`, e recusado na
+                primeira - lá ele apontaria para si mesma.
+
+                É o nosso código, e não o do provedor: você já o guarda ao
+                lado da assinatura, e as referências da Pagar.me não entram
+                nem saem por esta API. Traduzimos para os identificadores
+                que a bandeira quer.
+
+                Uma cobrança sem identificador de recorrência - um PIX, uma
+                recusa - é recusada com `422`, com a frase dizendo qual usar.
+              example: ch_01k1y6r6m6q2x0p3d9v4t7c8n2
         device_event_id:
           type: [string, 'null']
           maxLength: 255
@@ -1764,14 +2220,20 @@ components:
           items:
             $ref: '#/components/schemas/ChargeItem'
           description: |
-            **Obrigatório.** Ao menos um item, e a soma de
-            `quantity × amount` deve bater com `amount` da cobrança.
+            A soma de `quantity × amount` de todos os itens deve bater
+            **exatamente** com o `amount` da cobrança.
 
-            Os itens são a única descrição do que está sendo vendido que
-            chega ao arranjo de pagamento: é o que o comprador lê no
-            aplicativo do banco ao confirmar o PIX. Por isso não são
-            opcionais - uma cobrança que não diz o que cobra chega à tela
-            dele como um valor sem causa.
+            **No PIX é obrigatório.** Os itens são a única descrição do que
+            está sendo vendido que chega ao arranjo de pagamento, e é o que o
+            comprador lê no aplicativo do banco ao confirmar - uma cobrança
+            que não diz o que cobra chega à tela dele como um valor sem
+            causa.
+
+            **No cartão, mande `items` OU `description`.** Aquela tela não
+            existe ali, e montar um array cuja soma tem de fechar para vender
+            uma coisa só é trabalho sem função: `description: "Plano mensal"`
+            basta, e nós derivamos o item. Quem vende um carrinho continua
+            mandando os itens.
 
     SavedCard:
       type: object
@@ -1830,16 +2292,96 @@ components:
 
 
 
+    CreateSavedCardRequest:
+      type: object
+      description: |
+        O corpo de `POST /v1/cards`. Mesmo vocabulário de `POST /v1/charges`
+        de propósito: quem já integra a cobrança no cartão não tem um
+        segundo formato para aprender.
+
+        O que não existe aqui: `amount`, `items` e `installments` - não há
+        venda -, e `card.id` - esta rota **cria** a referência do cofre, e
+        receber uma já existente seria pedir para guardar o que já está
+        guardado. Mandar qualquer um deles devolve `422`.
+      required: [customer, card]
+      properties:
+        customer:
+          $ref: '#/components/schemas/Customer'
+        card:
+          type: object
+          required: [token, holder_name, billing_address]
+          properties:
+            token:
+              type: string
+              maxLength: 255
+              description: |
+                O token de uso único criado no navegador por
+                `Vext(pk).createToken(...)` - ver `GET /v1/vext.js`. Vale
+                cerca de um minuto: tokenize no envio do formulário, nunca
+                na abertura da página.
+              example: token_ORP978GFOUoQD58x
+            holder_name:
+              type: string
+              maxLength: 64
+              description: O nome impresso no cartão, sem acento.
+              example: ANA P SOUZA
+            holder_document:
+              type: [string, 'null']
+              maxLength: 20
+              description: CPF ou CNPJ do portador, quando diferente do comprador.
+            billing_address:
+              type: [object, 'null']
+              description: |
+                **Opcional**, e nos mesmos três níveis de `POST /v1/charges`:
+                os seis campos, só `zip_code` + `number` (completamos o resto
+                pelo CEP), ou nada.
+
+                Aqui ele pesa mais que numa cobrança. É este endereço que o
+                antifraude vai ler na PRIMEIRA cobrança deste cartão, que
+                pode acontecer semanas depois - guardar sem endereço hipoteca
+                a aprovação da assinatura inteira.
+              required: [zip_code, number]
+              properties:
+                zip_code:
+                  type: string
+                  maxLength: 16
+                  example: '01310100'
+                street:
+                  type: string
+                  maxLength: 120
+                number:
+                  type: string
+                  maxLength: 20
+                complement:
+                  type: [string, 'null']
+                  maxLength: 80
+                neighborhood:
+                  type: string
+                  maxLength: 80
+                city:
+                  type: string
+                  maxLength: 80
+                state:
+                  type: string
+                  minLength: 2
+                  maxLength: 2
+                  example: SP
+
     CardInput:
       type: object
       description: |
         O cartão, como ele chega até nós.
 
         Note o que **não** está aqui, e nem poderia: número, validade e
-        CVV. O navegador do comprador os troca por um token direto com a
-        Pagar.me, pela biblioteca dela. Nenhum endpoint desta API aceita o
-        número de um cartão, e é isso que mantém a sua aplicação e a nossa
-        fora do escopo de PCI.
+        CVV. O navegador do comprador os troca por um token com o
+        `GET /v1/vext.js`. Nenhum endpoint desta API aceita o número de um
+        cartão, e é isso que mantém a sua aplicação e a nossa fora do escopo
+        de PCI.
+
+        Mandá-los é **recusado com `422`**, e não ignorado: aceitar e
+        descartar em silêncio ensinaria que é assim que se faz, e o número
+        teria atravessado a fronteira - entrado no corpo de uma requisição e
+        possivelmente num log - em troca de nada.
 
         São **dois formatos mutuamente excludentes**: `token`, para um
         cartão que o comprador acabou de digitar, e `id`, para um que já
@@ -1899,42 +2441,62 @@ components:
         billing_address:
           type: object
           description: |
-            **Obrigatório.** O antifraude reprova bem mais sem endereço, e
-            é ele que a bandeira compara com o cadastro do portador numa
-            contestação. O antifraude é cobrado por transação, aprovada ou
-            não: vale mandar tudo que ele sabe ler.
-          required: [zip_code, street, number, neighborhood, city, state]
+            **Opcional, e em três níveis de esforço.** Escolha um:
+
+            | O que você manda | O que acontece |
+            | --- | --- |
+            | os seis campos | melhor aprovação, e não depende de nada nosso |
+            | só `zip_code` + `number` | completamos rua, bairro, cidade e UF pelo CEP |
+            | nada | a cobrança passa, e a aprovação cai |
+
+            O antifraude reprova bem mais sem endereço, e é ele que a bandeira
+            compara com o cadastro do portador numa contestação. O antifraude
+            é cobrado por transação, aprovada ou não - vale mandar tudo que
+            ele sabe ler.
+
+            `zip_code` e `number` andam juntos: CEP sem número não identifica
+            endereço nenhum, e número sem CEP não se completa. Mandar um só
+            devolve `422`.
+          required: [zip_code, number]
           properties:
             zip_code:
               type: string
               maxLength: 16
               example: '01310100'
-            street:
-              type: string
-              maxLength: 120
             number:
               type: string
               maxLength: 20
+              example: '1000'
+            street:
+              type: [string, 'null']
+              maxLength: 120
+              description: Buscado pelo CEP quando você não manda.
             complement:
               type: [string, 'null']
               maxLength: 80
             neighborhood:
-              type: string
+              type: [string, 'null']
               maxLength: 80
+              description: Buscado pelo CEP quando você não manda.
             city:
-              type: string
+              type: [string, 'null']
               maxLength: 80
+              description: Buscado pelo CEP quando você não manda.
             state:
-              type: string
+              type: [string, 'null']
               minLength: 2
               maxLength: 2
               example: SP
+              description: Buscado pelo CEP quando você não manda.
         three_ds:
           type: [object, 'null']
           description: |
-            O resultado da autenticação do portador, quando ela aconteceu.
-            **Obrigatório** se a sua loja exige 3DS ou se você pediu
-            `three_d_secure: "required"`; recusado com `422` na ausência.
+            O resultado da autenticação do portador.
+
+            **Opcional, como todo o 3DS nesta API.** Só se torna obrigatório
+            quando VOCÊ pediu `three_d_secure: "required"` - aí a ausência
+            volta `422`, porque pedir autenticação e não autenticar é
+            incoerente.
 
             Quem produz estes dois valores é o navegador, contra o servidor
             da Stone. Não tente montá-los do seu lado: quem confere a
@@ -2022,7 +2584,15 @@ components:
         amount:
           allOf:
             - $ref: '#/components/schemas/Cents'
-          description: Valor cobrado, em centavos inteiros.
+          description: |
+            **O que o comprador paga**, em centavos inteiros.
+
+            Cuidado com a assimetria, porque ela é a pegadinha desta API: no
+            `POST` você manda o PREÇO DO PRODUTO, e aqui volta o TOTAL. No
+            Pix e no cartão à vista os dois são iguais; no cartão parcelado
+            este é maior, porque inclui o juro que o comprador pagou.
+
+            O preço do produto, de volta, é `amount - interest`.
         currency:
           type: string
           const: BRL
@@ -2032,14 +2602,29 @@ components:
           description: |
             Nossa taxa, em centavos inteiros. Congelada na criação: reflete
             o contrato que valia quando a venda aconteceu, não o de hoje.
+
+            Ela incide sobre o **preço do produto** (`amount - interest`), e
+            não sobre o total pago. É o que faz parcelar não custar nada a
+            você - ver `net_amount`.
         net_amount:
           allOf:
             - $ref: '#/components/schemas/Cents'
           description: |
-            O que fica com o vendedor, em centavos inteiros: `amount` menos
-            a nossa taxa e menos a taxa do meio de pagamento, que é
-            descontada direto do recebimento dele. Por isso
-            `amount - platform_fee` dá um número MAIOR que este.
+            O que fica com o vendedor, em centavos inteiros.
+
+            **Não é `amount - platform_fee`.** Essa conta dá um número maior,
+            e a diferença é o JURO do parcelamento: ele está dentro do
+            `amount` porque o comprador o pagou, mas não é receita de
+            ninguém aqui - atravessa até o arranjo de pagamento.
+
+            A identidade que fecha, e que o banco confere em toda cobrança:
+
+            ```
+            amount = net_amount + platform_fee + interest + co-produção
+            ```
+
+            No Pix e no cartão à vista o juro é zero, e aí
+            `amount - platform_fee` fecha.
         refunded_amount:
           allOf:
             - $ref: '#/components/schemas/Cents'
@@ -2102,7 +2687,7 @@ components:
             resposta pública seria um oráculo de risco para quem testa
             cartão em lote. O código de recusa sai numa recusa, em
             `error.details.decline_code`, onde quem lê é o seu servidor.
-          required: [brand, last_four, holder_name, installments, interest, three_d_secure, authorized_at]
+          required: [brand, last_four, holder_name, installments, recurrence_cycle, interest, three_d_secure, authorized_at]
           properties:
             brand:
               type: [string, 'null']
@@ -2120,6 +2705,17 @@ components:
                 `null` no PIX. A coluna tem default `1`, mas "uma parcela"
                 numa cobrança que não parcela é um número que convida a
                 conta errada.
+            recurrence_cycle:
+              type: [string, 'null']
+              enum: [first, subsequent, null]
+              description: |
+                O ciclo declarado na criação, de volta - e `null` em toda
+                cobrança que não faz parte de uma série, que é a esmagadora
+                maioria.
+
+                É por ele que você responde "quais destas cobranças foram de
+                assinatura?" ao conciliar, e é ele que explica a ausência do
+                comprador na tela numa contestação.
             interest:
               allOf:
                 - $ref: '#/components/schemas/Cents'
@@ -2345,6 +2941,89 @@ components:
           description: |
             `null` quando a consulta ao provedor falhou. Diferente de zero.
 
+    ClientConfig:
+      type: object
+      description: |
+        O que o `vext.js` recebe. **Todo campo está sempre presente**, e os
+        anuláveis vêm `null` quando o cartão está indisponível - nenhuma
+        credencial é entregue nesse caso.
+
+        Note o que **não** está aqui, e não vai estar: o motivo da
+        indisponibilidade e a grade de parcelas com preço. Esta resposta é
+        lida por um navegador qualquer, e os dois seriam informação da loja
+        vazando para quem abre a página dela.
+      required:
+        - object
+        - available
+        - tokenization
+        - three_d_secure
+        - brands
+        - max_installments
+        - min_amount
+      properties:
+        object:
+          type: string
+          const: client_config
+        available:
+          type: boolean
+        tokenization:
+          type: object
+          required: [endpoint, public_key]
+          properties:
+            endpoint:
+              type: [string, 'null']
+              format: uri
+            public_key:
+              type: [string, 'null']
+              description: |
+                A chave pública da adquirente que atende esta loja - não a sua
+                `pk_` da Vext. A biblioteca usa as duas: a sua para perguntar
+                aqui, esta para tokenizar.
+        three_d_secure:
+          type: object
+          required: [supported]
+          properties:
+            supported:
+              type: boolean
+        brands:
+          type: array
+          items:
+            type: string
+            enum: [visa, mastercard, elo, hipercard, amex, diners, discover, aura]
+        max_installments:
+          type: [integer, 'null']
+          minimum: 1
+          maximum: 12
+        min_amount:
+          oneOf:
+            - $ref: '#/components/schemas/Cents'
+            - type: 'null'
+
+    ThreeDsToken:
+      type: object
+      description: |
+        O token do desafio. De uso único e de prazo curto: peça um por
+        tentativa de pagamento, no envio do formulário.
+      required: [object, token, script_url, expires_in]
+      properties:
+        object:
+          type: string
+          const: three_ds_token
+        token:
+          type: string
+          description: O JWT que o navegador apresenta ao servidor 3DS.
+        script_url:
+          type: string
+          format: uri
+          description: |
+            A biblioteca do **mesmo ambiente** do token. Rodar a de produção
+            com um token de sandbox devolve um erro que não diz nada sobre a
+            troca - por isso os dois viajam juntos.
+        expires_in:
+          type: integer
+          description: Segundos de vida do token, a partir da emissão.
+          example: 300
+
     Installments:
       type: object
       description: |
@@ -2352,15 +3031,53 @@ components:
         recebe. **Todo campo está sempre presente** - `message` e
         `unavailable_reason` vêm `null` quando há grade, e `matrix` vem
         `{}` quando não há.
-      required: [object, amount, available, unavailable_reason, message, matrix]
+      required:
+        - object
+        - amount
+        - net_amount
+        - platform_fee
+        - available
+        - unavailable_reason
+        - message
+        - brands
+        - settlement
+        - matrix
       properties:
         object:
           type: string
           const: installments
         amount:
-          allOf:
+          oneOf:
             - $ref: '#/components/schemas/Cents'
-          description: O valor consultado, de volta, em centavos inteiros.
+            - type: 'null'
+          description: |
+            O que o comprador paga à vista, em centavos inteiros - e o
+            número que você manda em `amount` na criação da cobrança.
+
+            Consultado por `amount`, é ele de volta. Consultado por
+            `net_amount`, é o preço de vitrine que produz o líquido pedido.
+
+            `null` só num caso: consulta por `net_amount` numa loja sem
+            cartão. Converter um alvo líquido com a taxa de cartão de quem
+            não vende no cartão daria um número que não vale para nada.
+        net_amount:
+          oneOf:
+            - $ref: '#/components/schemas/Cents'
+            - type: 'null'
+          description: |
+            O que **você recebe**, em centavos inteiros: `amount` menos a
+            taxa da sua conta. `null` quando não há grade.
+
+            Não muda com o número de parcelas. O juro do parcelamento é
+            cobrado do comprador e sobe o `total_cents`, mas a taxa incide
+            sobre o preço do produto - parcelar não lhe custa nada a mais.
+        platform_fee:
+          oneOf:
+            - $ref: '#/components/schemas/Cents'
+            - type: 'null'
+          description: |
+            A taxa da sua conta sobre esta venda, em centavos inteiros -
+            `amount − net_amount`. `null` quando não há grade.
         available:
           type: boolean
         unavailable_reason:
@@ -2386,6 +3103,38 @@ components:
         message:
           type: [string, 'null']
           description: A frase em português, para o seu log. Não é contrato.
+        brands:
+          type: array
+          items:
+            type: string
+            enum: [visa, mastercard, elo, hipercard, amex, diners, discover, aura]
+          description: |
+            As bandeiras aceitas na sua conta, e **lista vazia** quando não
+            há grade. São exatamente as chaves de `matrix` menos `default`:
+            anunciar aqui uma bandeira que a matriz não precifica faria o
+            seu seletor oferecer uma opção sem preço.
+        settlement:
+          type: [object, 'null']
+          description: |
+            Quando o dinheiro cai, em **dias**, e `null` quando não há
+            grade.
+
+            Em D+X e não numa data: a data depende do calendário de
+            feriados bancários, que muda por ano e por praça, e uma data
+            errada numa API de pagamento é pior que data nenhuma. A de
+            verdade é a da Pagar.me, e só existe depois da venda.
+          required: [anticipated, delay_days]
+          properties:
+            anticipated:
+              type: boolean
+              description: A sua conta antecipa os recebíveis do cartão?
+            delay_days:
+              type: [integer, 'null']
+              description: |
+                O X do D+X, contado da aprovação. `null` sem antecipação -
+                aí cada parcela é liquidada no vencimento do arranjo, e não
+                há um número só que descreva a venda inteira.
+              example: 2
         matrix:
           type: object
           description: |
@@ -2399,7 +3148,7 @@ components:
 
     InstallmentOption:
       type: object
-      required: [installments, total_cents, installment_cents, interest_cents, label]
+      required: [installments, total_cents, installment_cents, interest_cents, net_cents, label]
       properties:
         installments:
           type: integer
@@ -2420,6 +3169,18 @@ components:
             Os juros embutidos, em centavos inteiros. `0` nas parcelas sem
             juros. Eles viajam até a Pagar.me como um ITEM à parte, e é por
             isso que o comprador vê a conta separada na tela.
+        net_cents:
+          allOf:
+            - $ref: '#/components/schemas/Cents'
+          description: |
+            O que **você recebe** nesta opção - o mesmo `net_amount` do
+            topo, repetido aqui para que o seu seletor não precise cruzar
+            dois níveis do JSON.
+
+            É **igual em todas as linhas**, e isso é a informação: o juro do
+            parcelamento sai do bolso do comprador, e a taxa incide sobre o
+            preço do produto. Oferecer 12x não lhe custa um centavo a mais
+            que oferecer 1x.
         label:
           type: string
           description: A opção já escrita para a tela, em português.

@@ -5,10 +5,12 @@
 | `revoked_api_key` | 401 | `authentication_error` | A chave existiu e foi desligada. Gere outra em **Desenvolvedores** |
 | `expired_api_key` | 401 | `authentication_error` | Gere outra em **Desenvolvedores** |
 | `insufficient_scope` | 403 | `permission_error` | A chave é válida, falta o escopo. `details.required_ability` diz qual |
-| `one_click_requires_three_ds` | 403 | `permission_error` | A loja exige [autenticação do portador](/essenciais/autenticacao-do-portador), que não convive com cartão guardado |
+| `one_click_requires_three_ds` | 403 | `permission_error` | Você pediu `three_d_secure: "required"` num cartão guardado, que [não pode autenticar](/essenciais/autenticacao-do-portador) |
 | `resource_not_found` | 404 | `not_found_error` | O recurso não existe — ou é de outra conta |
 | `card_not_found` | 404 | `not_found_error` | O `pm_` não existe, ou é de outro comprador |
 | `card_declined` | 402 | `card_error` | A operadora recusou. **A cobrança existe**, em `details.charge_id`, com status `failed` |
+| `card_not_available` | 422 | `invalid_request_error` | Em `POST /v1/cards`: esta conta não vende no cartão. `details.reason` diz por quê |
+| `three_ds_unavailable` | 422 | `invalid_request_error` | Em `POST /v1/three_ds_tokens`: esta conta não consegue autenticar o portador |
 | `pix_failed` | 402 | `api_error` | Não conseguimos gerar o código Pix. Ofereça o cartão, ou tente de novo |
 | `idempotency_key_too_long` | 400 | `invalid_request_error` | Encurte a chave para 255 caracteres |
 | `idempotency_key_reused` | 409 | `idempotency_error` | A chave já foi usada com outro corpo. Use uma chave nova |

@@ -1,0 +1,151 @@
+---
+title: "Taxas e liquidação"
+description: "Sobre o que a taxa incide, quem paga o juro do parcelamento, e quando o dinheiro cai."
+icon: "percent"
+---
+
+import Suporte from "/snippets/suporte.mdx";
+
+Quem já integrou outro gateway tende a supor um modelo que não é o nosso. Esta página é o modelo
+inteiro, e ela existe para que você não descubra a diferença na conciliação do mês.
+
+<Note>
+  **Os números da sua conta não estão escritos aqui**, e é de propósito: eles são contratuais e
+  mudam por loja. Quem os responde é a API —
+  [`GET /v1/installments`](/api-reference/cobrancas/parcelas) devolve a sua taxa aplicada a um valor
+  concreto, e o painel os mostra em **Taxas**. Os exemplos abaixo usam `5,99% + R$ 1,99` só para a
+  conta fechar na tela.
+</Note>
+
+## A taxa incide sobre o preço do produto
+
+Não sobre o total que o comprador paga. A distinção só aparece no cartão parcelado, e é a que mais
+gera confusão. Uma venda de R$ 100,00 em 3x, campo por campo:
+
+```
+você MANDA   amount ........... R$ 100,00   <- o preço do produto
+                                             (a taxa incide aqui)
+
+             card.interest .... R$  10,17   <- juro, do comprador
+             platform_fee ..... R$   7,98   <- 5,99% + R$ 1,99 sobre os 100
+             net_amount ....... R$  92,02   <- o seu líquido
+                                ─────────
+volta        amount ........... R$ 110,17   <- o que o comprador paga
+```
+
+<Warning>
+  **O `amount` que você manda não é o `amount` que volta.** Você manda o preço do produto; a resposta
+  traz o total pago, com o juro dentro. O preço do produto, de volta, é `amount − card.interest`.
+
+  E `net_amount` **não** é `amount − platform_fee`: R$ 110,17 − R$ 7,98 daria R$ 102,19, não R$ 92,02.
+  A diferença é o juro, que não é receita de ninguém aqui — ele atravessa até o arranjo de pagamento.
+
+  A identidade que fecha é `amount = net_amount + platform_fee + interest + co-produção`, e o banco a
+  confere em toda cobrança.
+</Warning>
+
+No **Pix** e no cartão **à vista** o juro é zero, e aí `amount − platform_fee` fecha. É por isso que
+quem integrou só Pix nunca tropeçou nisso.
+
+<Warning>
+  Consequência prática: **parcelar não lhe custa nada.** O seu líquido é o mesmo em 1x e em 12x —
+  quem paga o juro é o comprador. É por isso que `GET /v1/installments` devolve `net_cents` idêntico
+  em todas as linhas da grade: mostrar isso é metade da resposta.
+</Warning>
+
+### À vista é sem juros, e quem banca somos nós
+
+Em 1x o comprador paga exatamente o preço do produto. O custo de adquirência daquela venda existe
+igual — ele sai da **nossa** perna, não da sua. É decisão comercial, e é a razão de uma venda à
+vista render menos para nós que uma parcelada.
+
+## O split é automático
+
+Você não declara recebedor, não calcula perna, não manda `split` na cobrança. Nós dividimos:
+
+<Steps>
+
+<Step title="A sua perna">
+  `amount − taxa`. É o `net_amount` da cobrança, e é o que entra no seu saldo.
+</Step>
+
+<Step title="A nossa perna">
+  A taxa, mais o juro do parcelamento que atravessa até a adquirente. De dentro dela sai o custo de
+  adquirência — o que sobra é a nossa margem, e ela não aparece na sua resposta.
+</Step>
+
+<Step title="Co-produção, quando o produto tem">
+  Se a venda é de um produto com parceiros, a divisão sai da sua perna e cada um recebe direto. Você
+  vê o total em `coproduction_amount_cents` no painel.
+</Step>
+
+</Steps>
+
+A soma fecha por construção: `net_amount + platform_fee + co-produção + juros = amount`. Não é
+convenção — é uma restrição `CHECK` da tabela de cobranças, conferida em toda venda. Uma cobrança que
+não fechasse não chegaria a existir.
+
+## Quando o dinheiro cai
+
+Depende de a sua conta ter **antecipação** ligada.
+
+| | Sem antecipação | Com antecipação |
+| --- | --- | --- |
+| **Pix** | Na hora do pagamento | Na hora do pagamento |
+| **Cartão** | Cada parcela no vencimento dela | Tudo em **D+X** da aprovação |
+
+`GET /v1/installments` devolve o seu caso em `settlement`:
+
+```json
+"settlement": { "anticipated": true, "delay_days": 2 }
+```
+
+<Note>
+  **Em dias, e não em data.** Uma data depende do calendário de feriados bancários, que muda por ano
+  e por praça — e data errada numa API de pagamento é pior que data nenhuma. A data real de cada
+  recebível existe depois da venda, e você a vê no painel.
+</Note>
+
+### O que é antecipação
+
+No cartão, o arranjo de pagamento só libera o dinheiro no vencimento de cada parcela — uma venda em
+12x pingaria ao longo de um ano. Com antecipação, você recebe **tudo em D+X da aprovação**, e o custo
+disso já está embutido no juro que o comprador pagou.
+
+É por isso que o juro de 12x é bem maior que o de 2x: ele não é só "juro", é o custo de adiantar doze
+parcelas.
+
+## Reserva, e por que o saldo pode não ser todo saldo
+
+Algumas contas operam com **reserva rolante**: uma fatia de cada venda fica retida por alguns dias
+para cobrir contestação. Ela aparece separada no saldo — `available` é o que existe, `withdrawable` é
+o que você pode sacar hoje. Ver [Saldo](/essenciais/saldo).
+
+## O limite mínimo e o máximo
+
+Toda cobrança tem piso e teto, e eles são da sua conta. O piso do cartão é mais alto que o do Pix:
+abaixo dele os centavos fixos de adquirência e antifraude não caberiam na nossa perna, e o
+parcelamento simplesmente não aparece.
+
+Quando um valor está abaixo do piso, `GET /v1/installments` responde `available: false` com
+`unavailable_reason: "amount_below_minimum"` — o cartão está de pé na conta, o que não cabe é aquele
+valor.
+
+## Estorno
+
+A taxa de uma venda estornada volta ou não, conforme o seu contrato. O que **sempre** vale: o prazo
+para estornar é contado da venda, e depois dele a operação não existe mais — não é uma recusa nossa,
+é o arranjo que fechou a janela. Ver [Estornos](/essenciais/estornos).
+
+## Veja também
+
+<CardGroup cols={2}>
+  <Card title="Grade de parcelas" icon="table" href="/api-reference/cobrancas/parcelas">
+    A sua taxa aplicada a um valor, e quanto cobrar para receber um valor cheio.
+  </Card>
+  <Card title="Saldo" icon="wallet" href="/essenciais/saldo">
+    O que existe, o que dá para sacar, e a diferença entre os dois.
+  </Card>
+</CardGroup>
+
+<Suporte />

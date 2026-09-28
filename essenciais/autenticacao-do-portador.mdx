@@ -9,50 +9,71 @@ import Suporte from "/snippets/suporte.mdx";
 
 A autenticação do portador — 3-D Secure — pede ao banco emissor que confirme quem está usando o
 cartão. Autenticada a compra, uma contestação por "não fui eu" é respondida pelo emissor, e não pelo
-seu saldo. É a diferença entre discutir a venda e perdê-la de antemão.
+seu saldo.
 
-## Quem decide
+<Note>
+  **É opcional, e o padrão é não autenticar.** Você cobra no cartão sem passar por aqui — veja
+  [Cobrar no cartão](/receitas/cobrar-no-cartao). Esta página é para quando você QUER a
+  transferência de responsabilidade e está disposto a um passo a mais no navegador.
+</Note>
 
-Você **pede**; a decisão é nossa. O campo é `three_d_secure`, em `POST /v1/charges`, com três
-valores:
+## Você precisa disto?
 
-| Valor | O que significa |
+Vale a pena quando o seu produto atrai fraude: ticket alto, entrega digital imediata, comprador
+novo. Não vale quando o desafio custaria mais conversão do que a fraude custa — e essa conta é sua,
+não nossa.
+
+| Sem 3DS | Com 3DS |
 | --- | --- |
-| `automatic` | O padrão. Autentica quando a regra da plataforma mandar |
-| `required` | Autentica esta cobrança, sempre |
-| `off` | Não autentica, e o risco da contestação é seu |
+| `vext.createToken()` e cobrar | Um passo a mais: desafio no navegador |
+| Contestação por fraude sai do **seu** saldo | Responde o **banco emissor** |
+| Nenhuma fricção para o comprador | O emissor pode pedir senha ou código |
 
-A ordem das perguntas é a regra inteira:
+## Como pedir
+
+Um campo, em `POST /v1/charges`:
+
+```json
+{ "three_d_secure": "required", "card": { "...": "..." } }
+```
+
+Com `required`, a cobrança passa a **exigir** `card.three_ds` — pedir autenticação e não autenticar
+é incoerente, e volta `422`. Sem o campo, nada é exigido.
+
+<Note>
+  O interruptor de 3DS da sua conta, no painel, **não vale nesta API**. Ele governa os checkouts
+  hospedados por nós, onde somos nós que montamos a tela e podemos pedir o desafio ao comprador.
+  Aqui quem monta a tela é você, e exigir um identificador que só o navegador produz devolveria um
+  `422` impossível de resolver a quem cobra de um servidor.
+</Note>
+
+## Como rodar o desafio
+
+Três passos, e a ordem importa:
 
 <Steps>
 
-<Step title="A sua loja está habilitada a cobrar no cartão?">
-  Se não, não há o que autenticar, e o campo é ignorado.
+<Step title="Peça o token, no envio do formulário">
+  [`POST /v1/three_ds_tokens`](/api-reference/cartao/three-ds-token) devolve o token e o endereço da
+  biblioteca do mesmo ambiente. O token vale **cinco minutos** e serve uma vez só — pedi-lo na
+  abertura da página entrega um token morto a quem demora a preencher o endereço.
 </Step>
 
-<Step title="A sua conta exige autenticação?">
-  Se exige, **acabou**: autentica. Essa configuração é o piso, e um `three_d_secure: "off"` na
-  requisição não a desliga. É o que impede que um trecho de código esquecido tire a proteção de uma
-  loja inteira sem ninguém perceber.
+<Step title="Rode o desafio, com o número do cartão em claro">
+  O autenticador precisa do número, da validade e do endereço de cobrança. É por isso que o desafio
+  vem **antes** de `vext.createToken()`: tokenizar primeiro queimaria o token de um minuto durante o
+  desafio, que pode levar mais que isso.
 </Step>
 
-<Step title="Você pediu `required`?">
-  Então autentica, mesmo que a sua conta não exija.
-</Step>
-
-<Step title="Você pediu `off`?">
-  Então não autentica. A conta já respondeu no passo anterior, e daqui para baixo quem assume a
-  contestação é quem pediu.
-</Step>
-
-<Step title="O valor chegou ao piso da plataforma?">
-  Se chegou, autentica.
+<Step title="Tokenize e cobre">
+  Com o desafio concluído, chame `vext.createToken()` e crie a cobrança com
+  `three_d_secure: "required"` e o resultado em `card.three_ds`.
 </Step>
 
 </Steps>
 
-Ligar a exigência para a conta inteira é feito no painel, e é o caminho recomendado: uma regra num
-lugar só resiste melhor do que um campo repetido em cada chamada.
+Se a sua loja não autentica, `POST /v1/three_ds_tokens` responde `422 three_ds_unavailable` com o
+motivo — e não um erro genérico. Quem lê é o seu servidor, para quem o motivo é acionável.
 
 ## O que você precisa repassar
 
@@ -79,20 +100,39 @@ incomodado o comprador com um desafio e pagado a contestação assim mesmo.
 Na entrada, em `card.three_ds.status`, aceitamos **só** `Y` e `A`. Os outros descrevem uma
 autenticação que não deu certo, e mandá-los seria declarar uma proteção que não existe.
 
+## Cartão guardado não autentica
+
+O autenticador precisa do número do cartão em claro, e um cartão no cofre é uma referência sem
+número. Os dois são fisicamente excludentes.
+
+Por isso `three_d_secure: "required"` junto de um `card.id` volta `403`
+`one_click_requires_three_ds`: você pediu autenticação num cartão que não pode autenticar. Cobrar
+assim mesmo, fingindo que autenticou, entregaria a venda sem transferência de responsabilidade — e
+você descobriria depois de já ter perdido a contestação.
+
+Sem pedir `required`, o cartão guardado cobra normalmente. Ele só não tem liability shift, como
+qualquer cobrança sem autenticação.
+
+## E na assinatura?
+
+Uma cobrança de série não tem comprador na tela para desafiar, então ela nunca autentica.
+
 <Warning>
-  Cartão guardado e autenticação do portador são excludentes. O autenticador precisa do número do
-  cartão em claro, e um cartão no cofre é uma referência sem número — por isso um `card.id` numa
-  loja que exige autenticação volta `403` `one_click_requires_three_ds`. Cobrar assim mesmo,
-  fingindo que autenticou, entregaria a venda sem transferência de responsabilidade, e a loja
-  descobriria isso depois de já ter perdido a contestação.
+  Declarar a [recorrência](/essenciais/recorrencia) **não** devolve a proteção. É conformidade de
+  bandeira — evita multa de Mastercard, Visa e Elo —, e nada mais. Uma assinatura corre **sem**
+  liability shift, e você arca com a contestação por fraude.
+
+  O caminho que preserva a proteção é **autenticar a primeira cobrança**, com o comprador na tela e
+  o cartão digitado, e deixar as seguintes correrem com o `pm_`.
 </Warning>
 
 ## O que dá errado
 
 | `code` | HTTP | O sintoma |
 | --- | --- | --- |
-| `one_click_requires_three_ds` | `403` | Cartão guardado numa loja que exige autenticação |
-| `validation_failed` | `422` | `card.three_ds` ausente numa cobrança que exigia autenticação |
+| `validation_failed` | `422` | Você pediu `required` e não mandou `card.three_ds` |
+| `one_click_requires_three_ds` | `403` | Você pediu `required` num cartão guardado |
+| `three_ds_unavailable` | `422` | Em `POST /v1/three_ds_tokens`: esta conta não consegue autenticar |
 
 O token que inicia a autenticação vale **cinco minutos** e serve uma vez só. Peça-o no momento em
 que o comprador envia o formulário, e não quando a página abre: emitido cedo, ele já estaria morto

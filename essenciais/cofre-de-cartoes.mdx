@@ -11,18 +11,47 @@ o comprador não redigita número, validade nem CVV.
 
 ## Como um cartão entra
 
-Só de um jeito: como efeito de uma **venda aprovada** em que alguém pediu para guardar.
+De dois jeitos, e o primeiro é o melhor sempre que existir.
+
+### Na venda, com `save_card`
+
+Como efeito de uma **venda aprovada** em que alguém pediu para guardar:
 
 ```json Ao criar a cobrança
 { "amount": 10000, "save_card": true }
 ```
 
-Não existe `POST /v1/cards`, e isso é escolha de projeto. Um endpoint para cadastrar cartão sem
-cobrar seria um jeito confortável de testar números roubados em série — e a cobrança aprovada é a
-prova de que aquele cartão era mesmo do comprador.
-
 Uma cobrança recusada não guarda nada. Se o cofre falhar por qualquer motivo, a venda segue
 aprovada: guardar um cartão nunca pode derrubar um pagamento que já deu certo.
+
+Prefira este caminho. A cobrança aprovada é a prova de que aquele cartão era mesmo do comprador, e
+essa prova aparece depois na taxa de aprovação das cobranças seguintes.
+
+### Sem cobrar, com [`POST /v1/cards`](/api-reference/cartoes/guardar)
+
+Para quando não há primeira venda: assinatura com teste grátis, cobrança adiada, upsell combinado
+antes de qualquer cobrança.
+
+```json
+{
+  "customer": { "name": "Ana P Souza", "email": "ana@exemplo.com.br", "document": "11144477735", "phone_ddd": "11", "phone_number": "987654321" },
+  "card": { "token": "token_...", "holder_name": "ANA P SOUZA", "billing_address": { "…": "…" } }
+}
+```
+
+Ao guardar, pedimos ao provedor uma **verificação sem valor**: ele consulta a bandeira e o emissor
+para saber se o cartão existe e pode transacionar, sem tocar no limite do comprador. Falhando, nada
+é guardado.
+
+<Warning>
+  Essa verificação é menos que uma autorização, e a diferença é real: um cartão guardado por aqui
+  passou por uma consulta, não por uma venda. É por isso que esta rota tem um **limite de chamadas
+  bem mais apertado** que o resto da API — a mesma consulta que valida um cartão legítimo serve para
+  descobrir, de graça, se um número roubado está vivo. Vinte por minuto cobrem o uso real; quem
+  precisa migrar uma base grande [fala com a gente](mailto:suporte@usevext.com) antes.
+</Warning>
+
+O mesmo plástico guardado de novo devolve o **mesmo** `pm_` — não cria um segundo.
 
 ## Como cobrar com ele
 
@@ -71,7 +100,7 @@ Apagar a linha deixaria a sua conciliação com um buraco justamente nas vendas 
 | `card_expired` | `422` | A validade passou |
 | `card_revoked` | `422` | O cartão foi removido |
 | `card_not_usable_on_account` | `422` | O cartão não vale na conta que está cobrando |
-| `one_click_requires_three_ds` | `403` | A loja exige [autenticação do portador](/essenciais/autenticacao-do-portador) |
+| `one_click_requires_three_ds` | `403` | Você pediu `three_d_secure: "required"` num cartão guardado, que [não pode autenticar](/essenciais/autenticacao-do-portador) |
 | `insufficient_scope` | `403` | A chave não tem `cards:manage` |
 
 <Warning>
@@ -84,8 +113,14 @@ Apagar a linha deixaria a sua conciliação com um buraco justamente nas vendas 
 ## Veja também
 
 <CardGroup cols={2}>
+  <Card title="Cartão guardado" icon="vault" href="/api-reference/objetos/cartao-guardado">
+    Campo a campo do que estas rotas devolvem.
+  </Card>
   <Card title="Cobrança no cartão" icon="credit-card" href="/essenciais/cartao">
     Parcelas, juros e o objeto `card` da resposta.
+  </Card>
+  <Card title="Assinaturas" icon="repeat" href="/essenciais/recorrencia">
+    Cobrar em série com o `pm_`, e o que a bandeira exige.
   </Card>
   <Card title="Autenticação do portador" icon="shield-check" href="/essenciais/autenticacao-do-portador">
     Por que o cofre e a autenticação não convivem.

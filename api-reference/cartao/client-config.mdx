@@ -1,0 +1,35 @@
+---
+title: "Configuração para o navegador"
+sidebarTitle: "client_config"
+description: "O que o vext.js pergunta antes de tokenizar. Você normalmente não chama esta rota."
+icon: "browser"
+openapi: "/api-reference/openapi.yaml GET /v1/client_config"
+---
+
+<Note>
+  **Você normalmente não chama esta rota.** O [`vext.js`](/api-reference/cartao/vext-js) o faz por
+  você, uma vez por página.
+
+  Ela está documentada porque é exatamente o que a sua chave `pk_` alcança — e saber o que uma chave
+  pública consegue fazer não deveria exigir ler o nosso código.
+</Note>
+
+É a única rota da API que aceita chave publicável. Ela não cria cobrança, não lê venda e não move
+dinheiro: devolve o endereço de tokenização, a chave da adquirente desta loja, as bandeiras aceitas
+e os limites de parcelamento.
+
+<Warning>
+  Ela **não diz por que** o cartão está indisponível — só que está.
+
+  A razão é o público. Quem pergunta aqui é o navegador de um comprador qualquer, com uma chave que
+  está no código-fonte de uma página pública: o motivo entregue a ele transformaria o endpoint num
+  painel de status nosso, consultável por qualquer um.
+
+  O motivo é acionável para **você**, e está em
+  [`GET /v1/installments`](/api-reference/cobrancas/parcelas), atrás da chave secreta — em
+  `unavailable_reason`.
+</Warning>
+
+A grade de parcelas **com preço** também não vem aqui: ela depende do valor, e mora em
+[`GET /v1/installments`](/api-reference/cobrancas/parcelas), atrás da chave secreta. Entregá-la ao
+navegador deixaria qualquer um ler a taxa contratada de uma loja a partir do HTML dela.
