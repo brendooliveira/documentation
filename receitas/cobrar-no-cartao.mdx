@@ -6,6 +6,7 @@ icon: "credit-card"
 ---
 
 import AvisoCentavos from "/snippets/aviso-centavos.mdx";
+import CustomerIp from "/snippets/customer-ip.mdx";
 import Suporte from "/snippets/suporte.mdx";
 
 Cobrar no cartão são **duas chamadas por venda**: o `vext.js` troca os dados do cartão por um token
@@ -210,16 +211,12 @@ resposta = requests.post(
 | `402` | `failed` | A operadora recusou. A cobrança **existe** — leia abaixo |
 
 <Warning>
-  **Um `402` não é um erro de validação: a cobrança foi criada.** O `ch_` está em
-  `error.details.charge_id` — grave-o junto do pedido. Ele aparece em `GET /v1/charges`, conta na sua
-  taxa de aprovação e é por ele que o suporte encontra a tentativa. Jogar a resposta fora deixa você
-  sem nada para mostrar quando o comprador jurar que tentou pagar.
+  **Um `402` não é erro de validação: a cobrança foi criada.** Grave o `ch_` de
+  `error.details.charge_id` junto do pedido. Um `422`, sim, significa que nada foi criado.
 
-  Um `422`, sim, significa que **nada** foi criado.
+  O porquê e o que fazer com o `decline_code` estão em
+  [Cobrança no cartão](/essenciais/cartao).
 </Warning>
-
-A `message` do `402` é nossa e pode ser mostrada ao comprador. O `decline_code` é da operadora e
-serve ao seu time entender o padrão das recusas — não vire texto na tela.
 
 ## Melhorando a aprovação
 
@@ -248,17 +245,13 @@ Mandar os seis continua sendo o melhor: não depende da nossa busca de CEP respo
 <Accordion title="Parcelas — consulte a grade antes de mostrar">
 A grade muda por bandeira e por valor, e quem a calcula somos nós. Peça em
 [`GET /v1/installments`](/api-reference/cobrancas/parcelas) e mostre ao comprador exatamente os
-valores que vieram de lá. O juro é cobrado **dele** e soma ao total; o `amount` da cobrança continua
-sendo o preço do seu produto.
+valores que vieram de lá.
 
-A mesma rota responde a pergunta inversa: com `net_amount`, quanto cobrar para você receber um valor
-cheio.
+Como o juro entra na conta está em [Cobrança no cartão](/essenciais/cartao).
 </Accordion>
 
 <Accordion title="`customer_ip` — o IP de quem compra">
-Quem abre a conexão conosco é o seu servidor. Sem este campo, é o endereço **dele** que fica
-gravado, e o "Local" da venda aponta para o seu datacenter em toda cobrança. Atrás de CDN ou proxy,
-leia o IP do cabeçalho encaminhado.
+<CustomerIp />
 </Accordion>
 
 </AccordionGroup>

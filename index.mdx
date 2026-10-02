@@ -1,113 +1,63 @@
 ---
 title: "Introdução"
-description: "Cobranças PIX e cartão com split, estornos e saldo do vendedor. O que a API faz, o que ela recusa e por quê."
+description: "Cobranças Pix, cartão e boleto com split. O que a API faz, o que ela recusa e por quê."
 icon: "house"
 ---
 
 import UrlsBase from "/snippets/urls-base.mdx";
 import Suporte from "/snippets/suporte.mdx";
 
-A Vext é um gateway de pagamentos PIX e cartão, com split entre o vendedor e a plataforma. Você cria
-a cobrança, mostra o QR ou o formulário de cartão ao comprador, e nós avisamos quando o dinheiro
-entra.
+A Vext é um gateway de pagamentos Pix, cartão e boleto, com split entre o vendedor e a plataforma.
+Você cria a cobrança, mostra o código ao comprador, e nós avisamos quando o dinheiro entra.
 
 <CardGroup cols={3}>
   <Card title="Primeira cobrança" icon="rocket" href="/quickstart">
     Do `sk_test_` ao QR na tela, com o webhook já ligado.
   </Card>
   <Card title="Referência da API" icon="terminal" href="/api-reference/introducao">
-    As nove operações, com playground.
+    As nove operações e os nove eventos, com playground.
   </Card>
   <Card title="Webhooks" icon="webhook" href="/webhooks/visao-geral">
-    Os nove eventos e como conferir a assinatura.
+    Como receber e conferir a assinatura.
   </Card>
 </CardGroup>
 
 ## Quatro convenções que valem para tudo
 
-São quatro decisões de design que se repetem em toda a API. Conhecendo elas, o resto da
-documentação fica previsível — e você evita os quatro tropeços mais comuns de quem começa.
+Conhecendo estas quatro, o resto da documentação fica previsível — e você evita os tropeços mais
+comuns de quem começa.
 
-<AccordionGroup>
-
-<Accordion title="Dinheiro é sempre centavos inteiros" icon="coins">
-  R\$ 100,00 se envia como `10000`. Uma convenção só, em todos os campos, então nunca há dúvida
-  sobre o formato. Decimais são recusados com `422` porque `19.99 * 100` dá `1998.9999999999998` em
-  ponto flutuante — e o centavo perdido aí só apareceria na conciliação do mês.
-
-  [Valores em centavos →](/essenciais/valores-em-centavos)
-</Accordion>
-
-<Accordion title="A chave secreta fica no servidor" icon="key-round">
-  O valor em claro aparece **uma única vez**, na criação: guardamos apenas um hash SHA-256, de modo
-  que nem um vazamento do nosso banco permite cobrar em seu nome. Em troca, a chave é sua para
-  guardar — e o lugar dela é o servidor, nunca o navegador do comprador.
-
-  [Autenticação →](/essenciais/autenticacao)
-</Accordion>
-
-<Accordion title="Idempotency-Key em todo POST" icon="repeat">
-  Com ela, uma conexão que cai entre a requisição e a resposta deixa de ser um problema: você repete
-  com a mesma chave e recebe a cobrança que já existe, em vez de criar uma segunda.
-
-  [Idempotência →](/essenciais/idempotencia)
-</Accordion>
-
-<Accordion title="Erros têm código estável" icon="triangle-alert">
-  Todo erro traz um `code` que não muda, então dá para escrever a sua lógica em cima dele com
-  segurança. A `message` fica livre para ser reescrita e melhorada sem quebrar a sua integração.
-
-  [Erros →](/essenciais/erros)
-</Accordion>
-
-</AccordionGroup>
-
-## O que existe na v1
-
-**Nove operações** de servidor, todas sob `/v1` e autenticadas por chave secreta:
-
-| Operação | Endpoint |
+| Convenção | Em uma linha |
 | --- | --- |
-| [Criar cobrança](/api-reference/cobrancas/criar) | `POST /v1/charges` |
-| [Listar cobranças](/api-reference/cobrancas/listar) | `GET /v1/charges` |
-| [Consultar cobrança](/api-reference/cobrancas/consultar) | `GET /v1/charges/{code}` |
-| [Estornar cobrança](/api-reference/cobrancas/estornar) | `POST /v1/charges/{code}/refund` |
-| [Grade de parcelas](/api-reference/cobrancas/parcelas) | `GET /v1/installments` |
-| [Listar cartões guardados](/api-reference/cartoes/listar) | `GET /v1/cards` |
-| [Consultar cartão guardado](/api-reference/cartoes/consultar) | `GET /v1/cards/{code}` |
-| [Remover cartão guardado](/api-reference/cartoes/remover) | `DELETE /v1/cards/{code}` |
-| [Consultar saldo](/api-reference/saldo/consultar) | `GET /v1/balance` |
+| [Dinheiro é centavos inteiros](/essenciais/valores-em-centavos) | R\$ 100,00 se envia como `10000`. Decimal é recusado com `422`. |
+| [A chave secreta fica no servidor](/essenciais/autenticacao) | O valor em claro aparece uma única vez, na criação. Guardamos só o hash. |
+| [`Idempotency-Key` em todo POST](/essenciais/idempotencia) | Conexão que cai deixa de ser problema: repita com a mesma chave. |
+| [Erros têm `code` estável](/essenciais/erros) | Escreva sua lógica no `code`, nunca na `message`. |
 
-**Nove eventos**, que nós enviamos para o seu sistema:
+## Escolha o método
 
-| Evento | Quando dispara |
-| --- | --- |
-| [`charge.paid`](/api-reference/webhooks/charge-paid) | O pagamento é confirmado, no PIX ou no cartão |
-| [`charge.failed`](/api-reference/webhooks/charge-failed) | A operadora do cartão recusa o pagamento |
-| [`charge.in_analysis`](/api-reference/webhooks/charge-in-analysis) | A análise de fraude segura um pagamento no cartão |
-| [`charge.refunded`](/api-reference/webhooks/charge-refunded) | Um estorno é concluído |
-| [`charge.chargedback`](/api-reference/webhooks/charge-chargedback) | O portador contesta a compra na operadora |
-| [`med.opened`](/api-reference/webhooks/med-opened) | O comprador abre uma contestação de Pix |
-| [`med.approved`](/api-reference/webhooks/med-approved) | A contestação é deferida — a venda é devolvida |
-| [`med.rejected`](/api-reference/webhooks/med-rejected) | A contestação é indeferida — a venda segue de pé |
-| [`withdrawal.paid`](/api-reference/webhooks/withdrawal-paid) | O saque cai na conta do vendedor |
+<CardGroup cols={3}>
+  <Card title="Pix" icon="qr-code" href="/receitas/checkout-pix">
+    Cai em segundos. O padrão quando você omite `payment_method`.
+  </Card>
+  <Card title="Cartão" icon="credit-card" href="/receitas/cobrar-no-cartao">
+    Decide na hora, parcela, e o número nunca passa pelo seu servidor.
+  </Card>
+  <Card title="Boleto" icon="barcode" href="/receitas/checkout-boleto">
+    Janela de dias. Disponível em contas de split.
+  </Card>
+</CardGroup>
 
-## Cinco coisas que vale saber de antemão
+## Três coisas que vale saber de antemão
 
 Para você não procurar o que não existe:
 
 - **A imagem do QR você gera.** Devolvemos o payload copia-e-cola em `pix.qr_code`, e qualquer
-  biblioteca de QR o transforma em imagem em milissegundos. Assim as respostas ficam leves e você
-  controla tamanho, cor e formato.
-- **O número do cartão não passa por você.** `POST /v1/charges` cria cobrança no cartão, mas o que
-  ela recebe é um `token` de uso único, gerado no navegador do comprador pela biblioteca da
-  Pagar.me — nunca o PAN. Omitindo `payment_method`, a cobrança continua sendo PIX, como sempre foi.
-  Ver [Cobrança no cartão](/essenciais/cartao).
+  biblioteca de QR o transforma em imagem. O mesmo vale para o boleto: devolvemos a linha digitável
+  e o endereço do PDF, não o arquivo.
 - **Um cartão entra no cofre vendendo, não cadastrando.** Não há `POST /v1/cards`: o cartão é
-  guardado como efeito de uma cobrança aprovada com `save_card`. Ver
-  [Cofre de cartões](/essenciais/cofre-de-cartoes).
-- **O saque é pedido pelo painel.** A API não tem endpoint para isso, mas avisa quando o dinheiro
-  cai, pelo evento `withdrawal.paid`.
+  guardado como efeito de uma cobrança aprovada com `save_card`.
+  Ver [Cofre de cartões](/essenciais/cofre-de-cartoes).
 - **Cada chave enxerga só a própria conta.** A lista devolve apenas as cobranças do vendedor dono da
   chave, e uma cobrança de outra conta responde o mesmo `404` de uma que não existe.
 

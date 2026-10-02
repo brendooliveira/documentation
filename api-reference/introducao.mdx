@@ -19,6 +19,39 @@ autenticado por chave secreta no header.
 
 <HeadersComuns />
 
+## As nove operações
+
+Todas autenticadas por chave secreta. Não há endpoint de saque: ele é pedido pelo painel, e a API
+avisa quando o dinheiro cai, pelo evento `withdrawal.paid`.
+
+| Operação | Endpoint |
+| --- | --- |
+| [Criar cobrança](/api-reference/cobrancas/criar) | `POST /v1/charges` |
+| [Listar cobranças](/api-reference/cobrancas/listar) | `GET /v1/charges` |
+| [Consultar cobrança](/api-reference/cobrancas/consultar) | `GET /v1/charges/{code}` |
+| [Estornar cobrança](/api-reference/cobrancas/estornar) | `POST /v1/charges/{code}/refund` |
+| [Grade de parcelas](/api-reference/cobrancas/parcelas) | `GET /v1/installments` |
+| [Listar cartões guardados](/api-reference/cartoes/listar) | `GET /v1/cards` |
+| [Consultar cartão guardado](/api-reference/cartoes/consultar) | `GET /v1/cards/{code}` |
+| [Remover cartão guardado](/api-reference/cartoes/remover) | `DELETE /v1/cards/{code}` |
+| [Consultar saldo](/api-reference/saldo/consultar) | `GET /v1/balance` |
+
+## Os nove eventos
+
+Enviados por nós para o seu sistema. Ver [Webhooks](/webhooks/visao-geral).
+
+| Evento | Quando dispara |
+| --- | --- |
+| [`charge.paid`](/api-reference/webhooks/charge-paid) | O pagamento é confirmado — Pix, cartão ou boleto |
+| [`charge.failed`](/api-reference/webhooks/charge-failed) | A operadora do cartão recusa o pagamento |
+| [`charge.in_analysis`](/api-reference/webhooks/charge-in-analysis) | A análise de fraude segura um pagamento no cartão |
+| [`charge.refunded`](/api-reference/webhooks/charge-refunded) | Um estorno é concluído |
+| [`charge.chargedback`](/api-reference/webhooks/charge-chargedback) | O portador contesta a compra na operadora |
+| [`med.opened`](/api-reference/webhooks/med-opened) | O comprador abre uma contestação de Pix |
+| [`med.approved`](/api-reference/webhooks/med-approved) | A contestação é deferida — a venda é devolvida |
+| [`med.rejected`](/api-reference/webhooks/med-rejected) | A contestação é indeferida — a venda segue de pé |
+| [`withdrawal.paid`](/api-reference/webhooks/withdrawal-paid) | O saque cai na conta do vendedor |
+
 ## Erros
 
 Todo erro tem a mesma forma, inclusive os que não previmos:

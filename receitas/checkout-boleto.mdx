@@ -1,0 +1,208 @@
+---
+title: "Checkout boleto de ponta a ponta"
+sidebarTitle: "Checkout boleto"
+description: "Do pedido no seu sistema à liberação do produto, com a janela de dias que o boleto tem e o Pix não."
+icon: "barcode"
+---
+
+import AvisoCentavos from "/snippets/aviso-centavos.mdx";
+import CustomerIp from "/snippets/customer-ip.mdx";
+import Suporte from "/snippets/suporte.mdx";
+
+O fluxo completo de uma venda por boleto. Muito parecido com o do Pix — a diferença está toda no
+TEMPO, e é ela que decide o que você mostra na tela e quando libera o produto.
+
+<Note>
+  Boleto está disponível apenas em **contas de split**. Fora desse arranjo a criação responde `422`
+  com `boleto_not_available`. Ver [Como funciona](/essenciais/boleto).
+</Note>
+
+<AvisoCentavos />
+
+<Steps>
+
+<Step title="Crie a cobrança com payment_method boleto">
+
+Igual ao Pix, com um campo a mais: `payment_method: "boleto"`. O objeto `boleto` é opcional — sem
+ele valem o prazo e a frase padrão da plataforma.
+
+Gere a `Idempotency-Key` **antes** da chamada e grave-a junto do pedido. Sem ela, um timeout seguido
+de retry emite **dois boletos** para o mesmo comprador — e os dois pagáveis.
+
+<CustomerIp />
+
+<CodeGroup>
+
+```php PHP
+$pedido->update(['chave_idempotencia' => (string) Str::uuid()]);
+
+$resposta = Http::withToken(config('services.vext.key'))
+    ->withHeaders(['Idempotency-Key' => $pedido->chave_idempotencia])
+    ->post('https://api.usevext.com/v1/charges', [
+        'amount' => $pedido->total_em_centavos,   // inteiro, sempre
+        'payment_method' => 'boleto',
+        'description' => $pedido->descricao,
+        'reference' => $pedido->id,
+        'customer_ip' => $request->ip(),
+        'customer' => [
+            'name' => $pedido->cliente->nome,
+            'email' => $pedido->cliente->email,
+            'document' => $pedido->cliente->cpf,
+        ],
+        'items' => $pedido->itensParaVext(),
+        'boleto' => [
+            'due_days' => 5,
+            'instructions' => 'Nao receber apos o vencimento.',
+        ],
+    ]);
+```
+
+```bash cURL
+curl https://api.usevext.com/v1/charges \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Idempotency-Key: 8f2b1c40-..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "amount": 50000,
+    "payment_method": "boleto",
+    "description": "Assinatura anual",
+    "reference": "pedido-1042",
+    "customer": {
+      "name": "Maria Compradora",
+      "email": "maria@exemplo.com",
+      "document": "11144477735"
+    },
+    "items": [
+      { "code": "plano-anual", "description": "Assinatura anual", "quantity": 1, "amount": 50000 }
+    ],
+    "boleto": { "due_days": 5 }
+  }'
+```
+
+</CodeGroup>
+
+</Step>
+
+<Step title="Confira que a linha digitável veio">
+
+```json Resposta
+{
+  "id": "ch_01k1y6r6m6q2x0p3d9v4t7c8n2",
+  "status": "pending",
+  "payment_method": "boleto",
+  "boleto": {
+    "line": "34191.79001 01043.510047 91020.150008 1 92230000050000",
+    "pdf": "https://api.pagar.me/1/boletos/test_abc?format=pdf",
+    "url": "https://api.pagar.me/1/boletos/test_abc",
+    "barcode": "https://api.pagar.me/core/v5/transactions/tran_abc/barcode",
+    "nosso_numero": "0000123456",
+    "due_at": "2026-10-07T23:59:59Z"
+  }
+}
+```
+
+<Warning>
+  **`boleto.line` nulo significa que o boleto não existe.** Quando o provedor recusa a emissão por
+  regra de negócio, a resposta vem `200` e a cobrança nasce `failed` — não há o que o comprador
+  pague. Confira o campo antes de mostrar a tela.
+</Warning>
+
+</Step>
+
+<Step title="Entregue a linha digitável, e deixe ir">
+
+Mostre `boleto.line` em destaque, com botão de copiar — é o que a pessoa usa no aplicativo do banco.
+O PDF é o passo seguinte, para quem quer o documento.
+
+Exiba o vencimento a partir de `boleto.due_at`, e escreva **"vence em"**, não "expira em".
+
+<Warning>
+  Não desenhe contagem regressiva nem tela de espera. O boleto não resolve em segundos, e o banco
+  aceita depois do vencimento — um "expira em 2 dias" faz o comprador desistir de pagar um documento
+  que ainda vale, e um "expirado" faz ele jogar fora um boleto pagável.
+</Warning>
+
+Diga também que a confirmação demora: **até 3 dias úteis**. Sem essa frase o comprador paga, volta à
+sua tela, vê "aguardando" e abre chamado — ou paga de novo por outro meio.
+
+</Step>
+
+<Step title="Aja no charge.paid, nunca antes">
+
+<Warning>
+  O produto é liberado no `charge.paid`. A resposta de `POST /v1/charges` devolve `pending`: o
+  boleto foi emitido, ninguém pagou ainda. E aqui "ainda" pode ser **dias**.
+</Warning>
+
+No seu endpoint de webhook: confira a assinatura, grave o evento, responda `200`, processe em fila.
+O passo a passo está em [Verificar a assinatura](/webhooks/assinatura) e
+[Entregas e retentativas](/webhooks/entregas-e-retentativas).
+
+```php Depois da assinatura conferida
+if ($evento['type'] === 'charge.paid') {
+    $cobranca = $evento['data']['charge'];
+    $pedido = Pedido::where('cobranca_id', $cobranca['id'])->firstOrFail();
+
+    $pedido->marcarComoPago($cobranca['paid_at']);
+    LiberarAcesso::dispatch($pedido);
+}
+```
+
+O mesmo evento serve aos três métodos — você não precisa de código separado para boleto.
+
+</Step>
+
+<Step title="Não cancele no vencimento">
+
+Esta é a diferença que mais gera prejuízo em integração nova.
+
+No Pix, uma cobrança vencida está morta: o QR não é mais aceito, e cancelar o pedido é correto. No
+boleto **não**: o banco aceita depois da data, e nós não varremos boleto vencido para `expired` por
+esse motivo.
+
+Se a sua rotina cancela pedidos no vencimento, ela vai encerrar vendas que ainda podem ser pagas — e
+o `charge.paid` chega depois, apontando para um pedido que você já desfez.
+
+Se você precisa de um prazo rígido por regra de negócio, faça-o explícito: espere alguns dias
+**depois** do vencimento antes de desistir, e trate a chegada tardia do `charge.paid` como um caso
+que o seu código precisa saber resolver.
+
+</Step>
+
+<Step title="Mantenha uma rede de segurança">
+
+Webhook é entrega pela rede, e rede falha. Uma tarefa periódica que consulta as cobranças `pending`
+resolve — e no boleto ela vale mais que no Pix, porque a janela é longa e um webhook perdido fica
+muito tempo sem ser notado:
+
+```bash
+curl "https://api.usevext.com/v1/charges?status=pending&created_to=2026-10-01T00:00:00-03:00" \
+  -H "Authorization: Bearer sk_live_..."
+```
+
+A lista filtra por `status`, `reference` e janela de criação — não por método. Separe os boletos
+pelo `payment_method` de cada item da resposta, ou guarde o método no seu pedido ao criar a
+cobrança, que é mais barato.
+
+Faça o polling **espaçado** — uma vez por hora é mais que suficiente para um método que leva dias.
+Ver [Limites de requisição](/essenciais/limites-de-taxa).
+
+Quando a conciliação do seu banco mostrar um pagamento que você não recebeu por webhook, o campo que
+casa os dois é `boleto.nosso_numero`.
+
+</Step>
+
+</Steps>
+
+## Veja também
+
+<CardGroup cols={2}>
+  <Card title="Como funciona" icon="barcode" href="/essenciais/boleto">
+    As diferenças de prazo, taxa e disponibilidade.
+  </Card>
+  <Card title="Criar cobrança" icon="terminal" href="/api-reference/cobrancas/criar">
+    Todos os campos, com playground.
+  </Card>
+</CardGroup>
+
+<Suporte />

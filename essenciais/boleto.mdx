@@ -1,0 +1,106 @@
+---
+title: "Cobrança por boleto"
+sidebarTitle: "Como funciona"
+description: "O que o boleto tem de diferente do Pix e do cartão: janela de dias, vencimento que não mata, e disponibilidade restrita."
+icon: "barcode"
+---
+
+import Suporte from "/snippets/suporte.mdx";
+
+Boleto é o método mais lento dos três, e quase tudo de diferente nele vem daí.
+
+<Note>
+  **Boleto está disponível apenas em contas de split.** Numa loja fora desse arranjo,
+  `POST /v1/charges` com `payment_method: "boleto"` responde `422` com `boleto_not_available`.
+  Fale com o suporte para saber em qual arranjo a sua conta está.
+</Note>
+
+## As três diferenças que importam
+
+| | Pix | Cartão | Boleto |
+| --- | --- | --- | --- |
+| Quando resolve | Segundos | Na mesma resposta | **Dias** |
+| O que o comprador leva | Copia-e-cola | Nada, já pagou | **Linha digitável** |
+| O prazo é limite? | Sim, morre | Não há | **Não** |
+
+### A janela é de dias, não de segundos
+
+A cobrança nasce `pending` e só o webhook a resolve — igual ao Pix nisso. A diferença é o tempo: a
+conciliação bancária é em lote, e a confirmação chega até **3 dias úteis** depois do pagamento.
+
+Não desenhe tela de espera para boleto. Um spinner aguardando conciliação fica girando por dias.
+Entregue a linha digitável e deixe o comprador ir embora — quem avisa depois é o `charge.paid`.
+
+### O vencimento não mata o boleto
+
+`boleto.due_at` é **vencimento, não expiração**. O banco aceita boleto depois dessa data, com juros
+e multa se o seu contrato tiver.
+
+Isso tem uma consequência prática: **não trate `due_at` como fim**. Se você cancelar o pedido no
+vencimento, vai encerrar uma venda que ainda pode ser paga — e o pagamento chega depois, num pedido
+que você já desfez. Nós não varremos boleto vencido para `expired` por esse exato motivo; quem o
+encerra é o banco ou o provedor.
+
+### Não devolvemos o documento, devolvemos os endereços
+
+Como no QR do Pix:
+
+| Campo | O que é |
+| --- | --- |
+| `boleto.line` | A **linha digitável**. É o que o comprador usa — ninguém digita código de barras. |
+| `boleto.pdf` | Endereço do PDF, para o comprador baixar ou imprimir. |
+| `boleto.url` | Página do boleto, para visualizar no navegador. |
+| `boleto.barcode` | Endereço da imagem do código de barras. |
+| `boleto.nosso_numero` | Identificador no arquivo de retorno do banco. É por ele que uma conciliação encontra à mão um pagamento cujo webhook não chegou. |
+| `boleto.due_at` | O vencimento, normalizado para o fim do dia pelo provedor. |
+
+**`line` é o campo que diz se o boleto existe.** Quando ele vem `null`, o provedor recusou a emissão
+e a cobrança nasce `failed` — não há o que o comprador pague, e `pending` descreveria uma espera que
+não vai acontecer.
+
+## O que você pode escolher na emissão
+
+Os dois campos de `boleto` no corpo são opcionais. Sem eles, valem o prazo e a frase padrão da
+plataforma.
+
+| Campo | Limite | Default |
+| --- | --- | --- |
+| `boleto.due_days` | 1 a 90 | 3 dias |
+| `boleto.instructions` | 256 caracteres | Nossa frase padrão |
+
+O mínimo de 1 dia existe porque boleto que vence no mesmo dia nasce vencido: o banco não o processa
+na data de emissão.
+
+O que **não** está no seu controle, e é decisão nossa com a adquirente: espécie do documento, banco
+emissor e `nosso_numero`.
+
+## Boleto não parcela
+
+`card.installments` não se aplica, e mandar o objeto `card` numa cobrança de boleto é recusado com
+`422` — pela mesma razão de mandá-lo num Pix: aceitar e ignorar faria você acreditar que cobrou de
+outro jeito.
+
+## A taxa é por documento pago
+
+Diferente do Pix e do cartão, que cobram percentual sobre a venda, a taxa de boleto é um **valor
+fixo por boleto pago**. Emitir não custa nada, e boleto que vence sem pagamento não cobra taxa
+nenhuma.
+
+Isso muda o cálculo de quem emite muito e converte pouco: o custo acompanha a conversão, não o
+volume de emissão. Ver [Taxas e liquidação](/essenciais/taxas-e-liquidacao).
+
+Boleto tem **piso próprio de venda**, maior que o do Pix — uma taxa fixa sobre ticket pequeno não
+deixaria nada para o vendedor. Abaixo dele a cobrança é recusada com `amount_below_minimum`.
+
+## Veja também
+
+<CardGroup cols={2}>
+  <Card title="Checkout boleto" icon="list-checks" href="/receitas/checkout-boleto">
+    O fluxo completo, do pedido à liberação do produto.
+  </Card>
+  <Card title="Ciclo de vida" icon="activity" href="/essenciais/ciclo-de-vida-da-cobranca">
+    Os estados por que uma cobrança passa.
+  </Card>
+</CardGroup>
+
+<Suporte />

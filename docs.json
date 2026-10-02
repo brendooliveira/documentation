@@ -26,7 +26,12 @@
       "display": "interactive"
     },
     "examples": {
-      "languages": ["curl", "php", "javascript", "python"],
+      "languages": [
+        "curl",
+        "php",
+        "javascript",
+        "python"
+      ],
       "defaults": "required"
     }
   },
@@ -37,12 +42,19 @@
         "groups": [
           {
             "group": "Começar",
-            "icon": "rocket",
-            "pages": ["index", "quickstart"]
+            "pages": [
+              "index",
+              "quickstart"
+            ]
           },
           {
-            "group": "Cartão de crédito",
-            "icon": "credit-card",
+            "group": "Pix",
+            "pages": [
+              "receitas/checkout-pix"
+            ]
+          },
+          {
+            "group": "Cartão",
             "pages": [
               "receitas/cobrar-no-cartao",
               "essenciais/cartao",
@@ -52,28 +64,33 @@
             ]
           },
           {
-            "group": "Pix",
-            "icon": "qr-code",
-            "pages": ["receitas/checkout-pix"]
+            "group": "Boleto",
+            "pages": [
+              "receitas/checkout-boleto",
+              "essenciais/boleto"
+            ]
           },
           {
-            "group": "Essenciais",
-            "icon": "book-open",
+            "group": "Convenções da API",
             "pages": [
               "essenciais/valores-em-centavos",
-              "essenciais/taxas-e-liquidacao",
               "essenciais/autenticacao",
               "essenciais/idempotencia",
               "essenciais/erros",
-              "essenciais/limites-de-taxa",
+              "essenciais/limites-de-taxa"
+            ]
+          },
+          {
+            "group": "Depois da venda",
+            "pages": [
               "essenciais/ciclo-de-vida-da-cobranca",
               "essenciais/estornos",
-              "essenciais/saldo"
+              "essenciais/saldo",
+              "essenciais/taxas-e-liquidacao"
             ]
           },
           {
             "group": "Webhooks",
-            "icon": "webhook",
             "pages": [
               "webhooks/visao-geral",
               "webhooks/assinatura",
@@ -82,7 +99,6 @@
           },
           {
             "group": "Receitas",
-            "icon": "route",
             "pages": [
               "receitas/conciliacao",
               "receitas/repetir-com-seguranca",
@@ -96,7 +112,9 @@
         "groups": [
           {
             "group": "Visão geral",
-            "pages": ["api-reference/introducao"]
+            "pages": [
+              "api-reference/introducao"
+            ]
           },
           {
             "group": "Objetos",
@@ -135,7 +153,9 @@
           },
           {
             "group": "Saldo",
-            "pages": ["api-reference/saldo/consultar"]
+            "pages": [
+              "api-reference/saldo/consultar"
+            ]
           },
           {
             "group": "Eventos de cobrança",
@@ -157,7 +177,9 @@
           },
           {
             "group": "Eventos de saque",
-            "pages": ["api-reference/webhooks/withdrawal-paid"]
+            "pages": [
+              "api-reference/webhooks/withdrawal-paid"
+            ]
           }
         ]
       }
@@ -176,20 +198,38 @@
       {
         "header": "Documentação",
         "items": [
-          { "label": "Primeira cobrança", "href": "/quickstart" },
-          { "label": "Referência da API", "href": "/api-reference/introducao" },
-          { "label": "Webhooks", "href": "/webhooks/visao-geral" }
+          {
+            "label": "Primeira cobrança",
+            "href": "/quickstart"
+          },
+          {
+            "label": "Referência da API",
+            "href": "/api-reference/introducao"
+          },
+          {
+            "label": "Webhooks",
+            "href": "/webhooks/visao-geral"
+          }
         ]
       },
       {
         "header": "Vext",
         "items": [
-          { "label": "Suporte", "href": "https://wa.me/5511936185272" }
+          {
+            "label": "Suporte",
+            "href": "https://wa.me/5511936185272"
+          }
         ]
       }
     ]
   },
   "contextual": {
-    "options": ["copy", "view", "claude", "chatgpt", "mcp"]
+    "options": [
+      "copy",
+      "view",
+      "claude",
+      "chatgpt",
+      "mcp"
+    ]
   }
 }

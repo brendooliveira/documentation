@@ -6,6 +6,7 @@ icon: "qr-code"
 ---
 
 import AvisoCentavos from "/snippets/aviso-centavos.mdx";
+import CustomerIp from "/snippets/customer-ip.mdx";
 import Suporte from "/snippets/suporte.mdx";
 
 O fluxo completo de uma venda, do jeito que ele sobrevive a rede instável e a comprador que fecha a
@@ -20,10 +21,7 @@ aba.
 Gere a `Idempotency-Key` **antes** da chamada e grave-a junto do pedido. Envie `reference` com o seu
 identificador — é o que permite reencontrar a cobrança depois sem guardar o `id` que devolvemos.
 
-Mande também `customer_ip`, o IP de quem está comprando. Quem abre a conexão conosco é o seu
-servidor; sem esse campo é o endereço **dele** que fica gravado, e o "Local" da venda apontaria para
-o seu datacenter em toda cobrança. Se a sua aplicação fica atrás de CDN ou proxy, leia o IP do
-cabeçalho encaminhado, e não do socket — senão você envia o IP do proxy com a mesma confiança.
+<CustomerIp />
 
 `items` é obrigatório: mande o carrinho discriminado, e confira que a soma de `quantity * amount`
 bate com o `amount` que você enviou. É o detalhamento que sustenta a sua defesa numa contestação.

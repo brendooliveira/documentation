@@ -62,33 +62,15 @@ Nenhum endpoint desta API aceita `number` ou `cvv` — mandá-los devolve `422`,
 número vai do navegador direto à adquirente: não passa pelo seu servidor nem pelos nossos, e é isso
 que mantém a sua aplicação e a nossa fora do escopo de PCI.
 
-```html
-<script src="https://api.usevext.com/v1/vext.js"></script>
+Duas consequências que valem saber antes de desenhar a sua tela:
 
-<script>
-  const vext = Vext('pk_live_...');
+- **O token vale cerca de um minuto e serve uma vez só.** Por isso a tokenização acontece no *envio*
+  do formulário, nunca na abertura da página.
+- **`payment_method` e `card` andam juntos.** Mandar `card` numa cobrança Pix volta `422`, e
+  omiti-lo numa de cartão também.
 
-  // no ENVIO do formulário, nunca na abertura da página
-  const { token } = await vext.createToken({
-    number, holder_name, exp_month, exp_year, cvv,
-  });
-</script>
-```
-
-A chave `pk_` sai do painel, em **Desenvolvedores → Navegador**, e você cadastra nela os domínios
-das suas páginas de pagamento. O passo a passo completo está em
+O formulário pronto, a chave publicável e os domínios estão em
 [Cobrar no cartão](/receitas/cobrar-no-cartao).
-
-<Warning>
-  A chave **secreta** nunca vai para o navegador. O `vext.js` recusa uma `sk_` na hora e diz isso —
-  mas se ela já chegou ao HTML, revogue-a: quem abriu a página tem o poder de cobrar em seu nome.
-</Warning>
-
-O token vale cerca de um minuto e serve uma vez só. É por isso que a tokenização acontece no envio
-do formulário, e não enquanto o comprador digita.
-
-Mandar `card` numa cobrança PIX volta `422`, e omiti-lo numa de cartão também. A dupla
-`payment_method` + `card` anda junta.
 
 ## Ao contrário do PIX, uma recusa cria cobrança
 

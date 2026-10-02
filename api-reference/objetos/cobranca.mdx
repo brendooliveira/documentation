@@ -13,9 +13,26 @@ cobrança** — escrever o seu código contra ele uma vez resolve as quatro.
   como opcional o que nunca falta obrigaria você a testar a existência de uma chave que sempre
   existe.
 
-  Isso vale para `pix` e `card` também: numa cobrança de cartão o objeto `pix` vem com os membros
-  nulos, e vice-versa. O seu código lê `charge.card.brand` sem checar se `card` existe.
+  Isso vale para `pix`, `card` e `boleto` também: numa cobrança de cartão os objetos `pix` e
+  `boleto` vêm com os membros nulos. O seu código lê `charge.card.brand` sem checar se `card`
+  existe.
 </Note>
+
+## Qual bloco ler
+
+`payment_method` diz qual dos três está preenchido. Os outros dois vêm com todos os membros `null`.
+
+| `payment_method` | O bloco com dados | O campo que o comprador usa |
+| --- | --- | --- |
+| `pix` | `pix` | `pix.qr_code` — o copia-e-cola |
+| `credit_card` | `card` | nenhum, já pagou |
+| `boleto` | `boleto` | `boleto.line` — a linha digitável |
+
+<Warning>
+  **No boleto, `boleto.line` nulo significa que o documento não existe.** Quando o provedor recusa a
+  emissão, a cobrança nasce `failed` e não há o que pagar. Ver
+  [Cobrança por boleto](/essenciais/boleto).
+</Warning>
 
 ## O que NÃO está aqui
 

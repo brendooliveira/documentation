@@ -9,7 +9,7 @@ import TabelaStatusCobranca from "/snippets/tabela-status-cobranca.mdx";
 import Suporte from "/snippets/suporte.mdx";
 
 Uma cobrança caminha para um estado do qual não volta. Onde ela começa depende do meio de pagamento:
-o PIX nasce `pending`, o cartão nasce `processing`.
+Pix e boleto nascem `pending`, o cartão nasce `processing`.
 
 ```mermaid
 stateDiagram-v2
@@ -75,7 +75,7 @@ chega como [`charge.chargedback`](/api-reference/webhooks/charge-chargedback).
 
 ## Expiração
 
-`expires_in` é a validade do QR, em segundos.
+Só o **Pix** expira por prazo. `expires_in` é a validade do QR, em segundos.
 
 | | Valor |
 | --- | --- |
@@ -88,6 +88,19 @@ horário exato do vencimento volta em `pix.expires_at`.
 
 Uma cobrança `expired` não pode ser paga nem estornada. Para tentar de novo, crie outra — com uma
 `Idempotency-Key` nova, já que é uma tentativa nova de verdade.
+
+<Warning>
+  **Boleto não expira por prazo, e isso não é omissão nossa.** `boleto.due_at` é vencimento, não
+  limite: o banco aceita depois da data. Não varremos boleto vencido para `expired`, porque isso
+  encerraria venda que ainda pode ser paga.
+
+  Se a sua rotina cancela pedidos no vencimento, ela vai desfazer vendas pagáveis — e o
+  `charge.paid` chega depois, apontando para um pedido que não existe mais. Ver
+  [Cobrança por boleto](/essenciais/boleto).
+</Warning>
+
+O **cartão** também não expira: ele é decidido na mesma requisição, e uma cobrança parada em
+`processing` está esperando a operadora, não o comprador.
 
 ## Em qual estado agir
 

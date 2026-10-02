@@ -1995,6 +1995,31 @@ components:
             `quantity * amount` de todos os itens precisa ser exatamente
             igual ao `amount` da cobrança.
 
+    BoletoInput:
+      type: object
+      description: |
+        O que você pode escolher na emissão de um boleto. Os dois campos são
+        opcionais: sem eles, valem o prazo e a frase padrão da plataforma.
+
+        Note o que **não** está aqui: tipo de documento, banco emissor e
+        `nosso_numero`. Os três são decisão nossa e do contrato com a
+        adquirente, não do pedido.
+      additionalProperties: false
+      properties:
+        due_days:
+          type: integer
+          minimum: 1
+          maximum: 90
+          description: |
+            Dias até o vencimento, contados de hoje. Mínimo 1 porque boleto
+            que vence no mesmo dia nasce vencido - o banco não o processa.
+        instructions:
+          type: string
+          maxLength: 256
+          description: |
+            A frase impressa no documento, para o pagador. Substitui a
+            nossa; não é acrescentada a ela.
+
     CreateChargeRequest:
       type: object
       required: [amount, customer, items]
@@ -2069,7 +2094,7 @@ components:
           example: 189.45.12.7
         payment_method:
           type: string
-          enum: [pix, credit_card]
+          enum: [pix, credit_card, boleto]
           default: pix
           description: |
             Omitido, é `pix` - e continua sendo, para sempre. Toda
@@ -2078,6 +2103,20 @@ components:
 
             Com `credit_card`, o objeto `card` passa a ser obrigatório e
             `expires_in` passa a ser recusado: cartão não expira.
+
+            Com `boleto`, o objeto `boleto` é opcional - a plataforma já tem
+            prazo e instruções padrão. Boleto só está disponível para lojas
+            em conta de split na Pagar.me; fora desse arranjo a resposta é
+            `422` com `boleto_not_available`.
+        boleto:
+          oneOf:
+            - $ref: '#/components/schemas/BoletoInput'
+            - type: 'null'
+          description: |
+            Opcional quando `payment_method` é `boleto`, e **recusado** nos
+            demais - mandá-lo num PIX devolve `422`, pela mesma razão do
+            `card`: aceitar e ignorar faria você acreditar que emitiu um
+            boleto.
         card:
           oneOf:
             - $ref: '#/components/schemas/CardInput'
@@ -2556,6 +2595,7 @@ components:
         - customer
         - pix
         - card
+        - boleto
         - created_at
         - paid_at
         - expired_at
@@ -2575,7 +2615,7 @@ components:
           $ref: '#/components/schemas/ChargeStatus'
         payment_method:
           type: string
-          enum: [pix, credit_card]
+          enum: [pix, credit_card, boleto]
           description: |
             O meio pelo qual esta cobrança foi criada. Omitir o campo na
             criação continua significando `pix` - é o que toda integração
@@ -2743,6 +2783,54 @@ components:
             authorized_at:
               type: [string, 'null']
               format: date-time
+        boleto:
+          type: object
+          description: |
+            Presente em toda cobrança, inclusive nas de PIX e de cartão -
+            onde os campos vêm `null`. Mesma regra do `pix` e do `card`, e
+            pelo mesmo motivo.
+
+            Boleto é oferecido apenas a lojas em conta de split na Pagar.me.
+            Numa loja fora desse arranjo, `POST /v1/charges` com
+            `payment_method: boleto` responde 422 com
+            `boleto_not_available`.
+          required: [line, barcode, url, pdf, nosso_numero, due_at]
+          properties:
+            line:
+              type: [string, 'null']
+              description: |
+                Linha digitável - o equivalente do copia-e-cola do PIX, e o
+                único campo que o pagador realmente usa. É o que indica que
+                o boleto existe: quando ela vem `null`, o provedor recusou a
+                emissão e a cobrança nasce `failed`.
+              example: '34191.79001 01043.510047 91020.150008 1 92230000050000'
+            barcode:
+              type: [string, 'null']
+              description: |
+                Endereço da imagem do código de barras na Pagar.me. Não
+                servimos o arquivo - como no QR do PIX, devolvemos o
+                endereço.
+            url:
+              type: [string, 'null']
+              description: Página do boleto, para o pagador visualizar.
+            pdf:
+              type: [string, 'null']
+              description: O mesmo documento em PDF.
+            nosso_numero:
+              type: [string, 'null']
+              description: |
+                Identificador do boleto na conta do emissor. É o número que
+                o banco devolve no arquivo de retorno, e é por ele que se
+                encontra à mão um pagamento cujo webhook não chegou.
+            due_at:
+              type: [string, 'null']
+              format: date-time
+              description: |
+                **Vencimento, não expiração.** O banco aceita boleto depois
+                desta data, e por isso não varremos boleto vencido para
+                `expired` - quem tratar esta data como fim encerraria venda
+                que ainda pode ser paga. Normalizada pelo provedor para o
+                fim do dia.
         created_at:
           type: [string, 'null']
           format: date-time
@@ -2780,7 +2868,7 @@ components:
           $ref: '#/components/schemas/ChargeStatus'
         payment_method:
           type: string
-          enum: [pix, credit_card]
+          enum: [pix, credit_card, boleto]
         amount:
           allOf:
             - $ref: '#/components/schemas/Cents'
@@ -3522,11 +3610,15 @@ components:
           description: O identificador do Pix contestado.
           example: E12345678202608041200
         purchase_date:
-          type: string
+          type: [string, 'null']
           format: date
           description: |
             A data que o comprador informou ao contestar, como ele a
             digitou. Pode não ser a de `charge.paid_at`.
+
+            `null` quando a contestação chega pelo arranjo do Pix em vez
+            do nosso formulário: ali a data da compra não existe como
+            campo, e a transação é identificada pelo `end_to_end_id`.
         opened_by:
           type: string
           enum: [customer, support]
@@ -3551,7 +3643,10 @@ components:
           required: [name]
           properties:
             name:
-              type: string
+              type: [string, 'null']
+              description: |
+                `null` quando a contestação vem do arranjo do Pix e o banco
+                de quem contestou não identifica a pessoa.
               example: Maria Souza
         evidence:
           type: array

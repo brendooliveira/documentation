@@ -44,8 +44,20 @@ volta        amount ........... R$ 110,17   <- o que o comprador paga
   confere em toda cobrança.
 </Warning>
 
-No **Pix** e no cartão **à vista** o juro é zero, e aí `amount − platform_fee` fecha. É por isso que
-quem integrou só Pix nunca tropeçou nisso.
+No **Pix**, no **boleto** e no cartão **à vista** o juro é zero, e aí `amount − platform_fee` fecha.
+É por isso que quem integrou só Pix nunca tropeçou nisso.
+
+### No boleto a taxa é por documento PAGO
+
+É a única exceção ao modelo acima: em vez de percentual sobre a venda, o boleto cobra um **valor
+fixo por boleto pago**. Emitir não custa nada, e boleto que vence sem pagamento não cobra taxa
+nenhuma.
+
+Para quem emite muito e converte pouco isso muda a conta: o custo acompanha a conversão, não o
+volume de emissão.
+
+O boleto tem **piso próprio**, maior que o do Pix — uma taxa fixa sobre ticket pequeno não deixaria
+nada para você. Ver [Cobrança por boleto](/essenciais/boleto).
 
 <Warning>
   Consequência prática: **parcelar não lhe custa nada.** O seu líquido é o mesmo em 1x e em 12x —
@@ -92,7 +104,11 @@ Depende de a sua conta ter **antecipação** ligada.
 | | Sem antecipação | Com antecipação |
 | --- | --- | --- |
 | **Pix** | Na hora do pagamento | Na hora do pagamento |
+| **Boleto** | Na conciliação do banco | Na conciliação do banco |
 | **Cartão** | Cada parcela no vencimento dela | Tudo em **D+X** da aprovação |
+
+No boleto não há antecipação a contratar: não existe recebível futuro para adiantar — o dinheiro
+aparece quando o banco concilia, e isso leva **até 3 dias úteis** depois do pagamento.
 
 `GET /v1/installments` devolve o seu caso em `settlement`:
 
@@ -123,19 +139,13 @@ o que você pode sacar hoje. Ver [Saldo](/essenciais/saldo).
 
 ## O limite mínimo e o máximo
 
-Toda cobrança tem piso e teto, e eles são da sua conta. O piso do cartão é mais alto que o do Pix:
-abaixo dele os centavos fixos de adquirência e antifraude não caberiam na nossa perna, e o
-parcelamento simplesmente não aparece.
+Toda cobrança tem piso e teto, e eles são da sua conta. **Cartão e boleto têm piso próprio, maior
+que o do Pix** — em ambos há centavos fixos que não caberiam na nossa perna num ticket pequeno.
 
-Quando um valor está abaixo do piso, `GET /v1/installments` responde `available: false` com
-`unavailable_reason: "amount_below_minimum"` — o cartão está de pé na conta, o que não cabe é aquele
+Abaixo do piso, a criação responde `422 amount_below_minimum`. No cartão,
+`GET /v1/installments` antecipa isso com `available: false` e
+`unavailable_reason: "amount_below_minimum"` — o método está de pé na conta, o que não cabe é aquele
 valor.
-
-## Estorno
-
-A taxa de uma venda estornada volta ou não, conforme o seu contrato. O que **sempre** vale: o prazo
-para estornar é contado da venda, e depois dele a operação não existe mais — não é uma recusa nossa,
-é o arranjo que fechou a janela. Ver [Estornos](/essenciais/estornos).
 
 ## Veja também
 

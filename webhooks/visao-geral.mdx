@@ -12,7 +12,7 @@ você descobre que um PIX foi pago sem ficar perguntando.
 
 | Evento | Quando dispara | O que vem em `data` |
 | --- | --- | --- |
-| [`charge.paid`](/api-reference/webhooks/charge-paid) | O pagamento é confirmado, no PIX ou no cartão | `charge` |
+| [`charge.paid`](/api-reference/webhooks/charge-paid) | O pagamento é confirmado — Pix, cartão ou boleto | `charge` |
 | [`charge.failed`](/api-reference/webhooks/charge-failed) | A operadora do cartão recusa o pagamento | `charge` |
 | [`charge.in_analysis`](/api-reference/webhooks/charge-in-analysis) | A análise de fraude segura um pagamento no cartão | `charge` |
 | [`charge.refunded`](/api-reference/webhooks/charge-refunded) | Um estorno é concluído | `charge` e `refund` |
@@ -29,8 +29,12 @@ ser recusada ou devolvida.
 Nos eventos de MED, o adjetivo descreve a decisão sobre a **contestação**, não sobre a sua loja:
 `med.approved` é a contestação deferida, e é nele que você perde a venda.
 
-Os eventos de cartão chegam mesmo que você só crie PIX pela API: as vendas feitas pelo checkout ou
-por link de pagamento são do mesmo vendedor, e vêm com `payment_method: credit_card`.
+Os eventos de cartão chegam mesmo que você só crie Pix pela API: as vendas feitas pelo checkout ou
+por link de pagamento são do mesmo vendedor, e vêm com `payment_method: credit_card`. O mesmo vale
+para `boleto`.
+
+Em todos os casos é o **mesmo** `charge.paid` — você não precisa de código separado por método.
+Quem diz qual foi é o `payment_method` da cobrança.
 
 ## Cadastro
 
