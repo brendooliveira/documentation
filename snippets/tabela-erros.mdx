@@ -28,6 +28,12 @@
 | `exceeds_remaining` | 422 | `invalid_request_error` | Peça no máximo o saldo estornável, ou omita `amount` |
 | `refund_window_closed` | 422 | `invalid_request_error` | Passaram-se 90 dias desde o pagamento. Não há retentativa |
 | `refund_disabled` | 422 | `invalid_request_error` | Estorno não habilitado para a conta. Fale com o suporte |
+| `insufficient_balance` | 422 | `invalid_request_error` | Em `POST /v1/withdrawals`: peça no máximo o `withdrawable` do saldo |
+| `negative_balance` | 422 | `invalid_request_error` | Em `POST /v1/withdrawals`: a conta tem dívida de estorno. As próximas vendas cobrem |
+| `amount_below_fee` | 422 | `invalid_request_error` | Em `POST /v1/withdrawals`: o valor precisa ser maior que a taxa de saque |
+| `no_pix_key` | 422 | `invalid_request_error` | Em `POST /v1/withdrawals`: mande `pix_key_type` e `pix_key`, ou cadastre uma chave padrão |
+| `no_bank_account` | 422 | `invalid_request_error` | Em `POST /v1/withdrawals`, no split: cadastre a conta bancária padrão no painel |
+| `no_pooled_account` | 422 | `invalid_request_error` | Em `POST /v1/withdrawals`: nada na chamada resolve. Fale com o suporte |
 | `too_many_requests` | 429 | `rate_limit_error` | Espere o `Retry-After` e repita |
 | `provider_rate_limited` | 429 | `rate_limit_error` | Limite do provedor. Repita com backoff |
 | `internal_error` | 500 | `api_error` | Repita **com a mesma `Idempotency-Key`** |

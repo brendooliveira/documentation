@@ -1,0 +1,19 @@
+---
+title: "Solicitar saque"
+description: "Tira dinheiro do saldo: PIX para uma chave no bolsão, TED para a conta bancária no split."
+icon: "banknote"
+openapi: "/api-reference/openapi.yaml POST /v1/withdrawals"
+---
+
+import AvisoCentavos from "/snippets/aviso-centavos.mdx";
+import NotaIdempotencia from "/snippets/nota-idempotencia.mdx";
+
+<AvisoCentavos />
+
+<NotaIdempotencia />
+
+<Warning>
+  O tipo da chave é **declarado** em `pix_key_type`, e um valor de outro tipo é recusado — nunca
+  reclassificado. Com o saque automático desligado, o saque fica em `awaiting_approval` até a Vext
+  aprovar. Destino por modelo, tipos de chave e recusas em [Saques](/essenciais/saques).
+</Warning>

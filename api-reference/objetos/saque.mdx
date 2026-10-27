@@ -1,0 +1,16 @@
+---
+title: "Saque"
+description: "Campo a campo do objeto que as rotas de saque devolvem."
+icon: "banknote"
+openapi-schema: "/api-reference/openapi.yaml Withdrawal"
+---
+
+Volta no pedido, na consulta e na listagem. **Todo campo está sempre presente**: os anuláveis vêm
+`null`, nunca ausentes.
+
+`pix_key_type` e `pix_key` vêm `null` no saque por TED, que é o do split. A chave vem mascarada.
+
+<Note>
+  Este objeto **não** é o que chega no webhook `withdrawal.paid`. Lá o líquido se chama `net_amount` e
+  o pedido, `requested_at`; aqui são `net` e `created_at`. Leia cada um com o seu próprio esquema.
+</Note>

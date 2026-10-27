@@ -1,0 +1,12 @@
+---
+title: "Consultar saque"
+description: "Um saque pelo código, com o status e o motivo da falha."
+icon: "search"
+openapi: "/api-reference/openapi.yaml GET /v1/withdrawals/{code}"
+---
+
+<Note>
+  Para saber que o saque caiu, o webhook [`withdrawal.paid`](/api-reference/webhooks/withdrawal-paid)
+  dispensa consultar em laço. A consulta é o caminho para os desfechos sem evento: `failed`,
+  `canceled` e `rejected`. Ver [Saques](/essenciais/saques).
+</Note>

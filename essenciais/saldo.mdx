@@ -42,6 +42,12 @@ passaria por aqui e falharia lá, depois, sem nada que o vendedor pudesse fazer 
 `reserved` existe para que a diferença entre `balance` e `available` não pareça bug do sistema. É
 dinheiro do vendedor que ainda não pode sair.
 
+## No bolsão, `withdrawable` é o `available`
+
+Contas no modelo bolsão não têm saldo guardado na adquirente: o nosso extrato é a fonte. Ali
+`withdrawable` é igual a `available` e `provider` vem sempre `null` — sem que isso signifique
+consulta falha. A seção abaixo vale para o split.
+
 ## `null` não é zero
 
 Quando a consulta ao provedor falha, `provider` e `withdrawable` vêm `null`:
@@ -102,6 +108,9 @@ dinheiro existe, ainda não chegou.
 <CardGroup cols={2}>
   <Card title="Estornos" icon="rotate-ccw" href="/essenciais/estornos">
     Como o saldo fica negativo.
+  </Card>
+  <Card title="Saques" icon="banknote" href="/essenciais/saques">
+    Pedir o saque pela API, para uma chave PIX ou para a conta bancária.
   </Card>
   <Card title="withdrawal.paid" icon="webhook" href="/api-reference/webhooks/withdrawal-paid">
     O evento que avisa quando o saque cai na conta.

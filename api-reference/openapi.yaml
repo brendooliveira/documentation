@@ -98,6 +98,8 @@ tags:
     description: Criação, consulta e estorno de cobranças, no PIX e no cartão.
   - name: Saldo
     description: Quanto o vendedor tem e quanto pode sacar.
+  - name: Saques
+    description: PIX para uma chave no bolsão, TED para a conta bancária no split.
   - name: Cartão no navegador
     description: |
       O que o navegador do comprador precisa para virar um formulário de
@@ -516,8 +518,9 @@ paths:
           provedor. É este que vale para pedir saque: usar só o nosso
           permitiria pedir dinheiro que a adquirente ainda não liberou.
 
-        `provider` e `withdrawable` vêm `null` quando a consulta ao provedor
-        falha. `null` não é zero: zero diria que não há dinheiro, quando o
+        No modelo bolsão `provider` vem sempre `null` e `withdrawable` é o
+        `available`. No split, `provider` e `withdrawable` vêm `null` quando a
+        consulta ao provedor falha. `null` não é zero: zero diria que não há dinheiro, quando o
         que houve foi uma consulta que não respondeu. O resto do saldo, que
         é nosso, continua correto.
       security:
@@ -575,6 +578,164 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /v1/withdrawals:
+    post:
+      tags: [Saques]
+      summary: Solicitar saque
+      operationId: createWithdrawal
+      description: |
+        Tira dinheiro do saldo do vendedor: PIX para uma chave no modelo
+        bolsão, TED para a conta bancária no split. Destino, tipos de chave,
+        status e recusas em [Saques](/essenciais/saques).
+      security:
+        - apiKey: [withdrawals:write]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateWithdrawalRequest'
+            examples:
+              email:
+                summary: PIX para um e-mail
+                value:
+                  amount: 50000
+                  pix_key_type: email
+                  pix_key: financeiro@fornecedor.com.br
+              aleatoria:
+                summary: PIX para uma chave aleatória
+                value:
+                  amount: 50000
+                  pix_key_type: random
+                  pix_key: 123e4567-e89b-12d3-a456-426614174000
+              padrao:
+                summary: Para a chave ou conta padrão
+                value:
+                  amount: 50000
+      responses:
+        '201':
+          description: Saque registrado e saldo debitado.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Withdrawal'
+              examples:
+                bolsao:
+                  summary: Saque PIX aguardando conferência
+                  value:
+                    object: withdrawal
+                    id: wd_01k1y8d4h1g2f3e4d5c6b7a8z9
+                    status: awaiting_approval
+                    method: pix
+                    amount: 50000
+                    currency: BRL
+                    fee: 367
+                    net: 49633
+                    pix_key_type: email
+                    pix_key: fi********@fornecedor.com.br
+                    failed_reason: null
+                    created_at: '2026-10-27T14:02:00+00:00'
+                    processed_at: null
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/IdempotencyConflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableWithdrawal'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '502':
+          $ref: '#/components/responses/ProviderUnavailable'
+    get:
+      tags: [Saques]
+      summary: Listar saques
+      operationId: listWithdrawals
+      description: Lista os saques da conta, do mais recente para o mais antigo.
+      security:
+        - apiKey: [withdrawals:read]
+      parameters:
+        - name: status
+          in: query
+          description: Filtra por situação.
+          schema:
+            $ref: '#/components/schemas/WithdrawalStatus'
+        - name: created_from
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: created_to
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 25
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+      responses:
+        '200':
+          description: Uma página de saques.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WithdrawalList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /v1/withdrawals/{code}:
+    get:
+      tags: [Saques]
+      summary: Consultar saque
+      operationId: getWithdrawal
+      security:
+        - apiKey: [withdrawals:read]
+      parameters:
+        - $ref: '#/components/parameters/WithdrawalCode'
+      responses:
+        '200':
+          description: O saque.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Withdrawal'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '429':
           $ref: '#/components/responses/RateLimited'
         '500':
@@ -1363,7 +1524,8 @@ webhooks:
       summary: Saque pago
       operationId: webhookWithdrawalPaid
       description: |
-        Enviado quando o dinheiro chega à conta bancária do vendedor.
+        Enviado quando o dinheiro chega ao destino: a conta bancária no
+        split, a chave PIX no bolsão.
 
         Os estados intermediários (`processing`, `pending`) **não** são
         entregues: não pedem ação do seu lado, e cada entrega tem custo de
@@ -1778,6 +1940,16 @@ components:
         type: string
         pattern: '^ch_[0-9a-z]{26}$'
       example: ch_01k1y6r6m6q2x0p3d9v4t7c8n2
+
+    WithdrawalCode:
+      name: code
+      in: path
+      required: true
+      description: Código público do saque, no formato `wd_…`.
+      schema:
+        type: string
+        pattern: '^wd_[0-9a-z]{26}$'
+      example: wd_01k1y8d4h1g2f3e4d5c6b7a8z9
 
     SavedCardCode:
       name: code
@@ -3029,6 +3201,108 @@ components:
           description: |
             `null` quando a consulta ao provedor falhou. Diferente de zero.
 
+    WithdrawalStatus:
+      type: string
+      description: O que cada status significa está em [Saques](/essenciais/saques#status).
+      enum: [pending, processing, awaiting_approval, approved, paid, failed, canceled, rejected]
+
+    PixKeyType:
+      type: string
+      description: |
+        `random` é a chave aleatória (o EVP do Banco Central); `evp` é
+        aceito como sinônimo na entrada, e a saída usa sempre `random`.
+      enum: [cpf, cnpj, email, phone, random]
+
+    CreateWithdrawalRequest:
+      type: object
+      required: [amount]
+      properties:
+        amount:
+          allOf:
+            - $ref: '#/components/schemas/Cents'
+          description: |
+            O que sai do saldo, em centavos inteiros. A taxa vem de dentro
+            deste valor.
+          example: 50000
+        pix_key_type:
+          type: string
+          enum: [cpf, cnpj, email, phone, random, evp]
+          description: |
+            Obrigatório junto com `pix_key`. Só para contas no modelo bolsão.
+        pix_key:
+          type: string
+          maxLength: 77
+          description: |
+            A chave, do tipo declarado. CPF e CNPJ têm o dígito verificador
+            conferido; telefone aceita com ou sem `+55`; e-mail é gravado em
+            minúsculas. Obrigatório junto com `pix_key_type`.
+          example: financeiro@fornecedor.com.br
+
+    Withdrawal:
+      type: object
+      description: |
+        Um saque. `amount`, `fee` e `net` são centavos inteiros, e sempre
+        `net = amount - fee`. A chave PIX vem mascarada.
+      required:
+        - object
+        - id
+        - status
+        - method
+        - amount
+        - currency
+        - fee
+        - net
+        - pix_key_type
+        - pix_key
+        - failed_reason
+        - created_at
+        - processed_at
+      properties:
+        object:
+          type: string
+          const: withdrawal
+        id:
+          type: string
+          example: wd_01k1y8d4h1g2f3e4d5c6b7a8z9
+        status:
+          $ref: '#/components/schemas/WithdrawalStatus'
+        method:
+          type: string
+          enum: [pix, ted]
+          description: '`pix` no bolsão, `ted` no split.'
+        amount:
+          allOf:
+            - $ref: '#/components/schemas/Cents'
+          description: O que saiu do saldo.
+        currency:
+          type: string
+          const: BRL
+        fee:
+          allOf:
+            - $ref: '#/components/schemas/Cents'
+          description: A taxa do saque, de dentro de `amount`.
+        net:
+          allOf:
+            - $ref: '#/components/schemas/Cents'
+          description: O que chega ao destino.
+        pix_key_type:
+          oneOf:
+            - $ref: '#/components/schemas/PixKeyType'
+            - type: 'null'
+          description: '`null` no saque por TED.'
+        pix_key:
+          type: [string, 'null']
+          description: A chave de destino, mascarada. `null` no saque por TED.
+          example: fi********@fornecedor.com.br
+        failed_reason:
+          type: [string, 'null']
+        created_at:
+          type: string
+          format: date-time
+        processed_at:
+          type: [string, 'null']
+          format: date-time
+
     ClientConfig:
       type: object
       description: |
@@ -3304,6 +3578,20 @@ components:
         pagination:
           $ref: '#/components/schemas/Pagination'
 
+    WithdrawalList:
+      type: object
+      required: [object, data, pagination]
+      properties:
+        object:
+          type: string
+          const: list
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Withdrawal'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+
     Error:
       type: object
       required: [error]
@@ -3437,13 +3725,12 @@ components:
                       allOf:
                         - $ref: '#/components/schemas/Cents'
                       description: |
-                        Taxa da transferência, em centavos inteiros.
-                        Repasse puro do custo bancário.
+                        Taxa do saque, em centavos inteiros.
                     net_amount:
                       allOf:
                         - $ref: '#/components/schemas/Cents'
                       description: |
-                        O que chegou na conta, em centavos inteiros
+                        O que chegou ao destino, em centavos inteiros
                         (`amount - fee`).
                     requested_at:
                       type: string
@@ -4080,6 +4367,62 @@ components:
                   code: refund_disabled
                   message: Estorno não está habilitado para esta conta. Fale com o suporte.
                   details: {}
+
+    UnprocessableWithdrawal:
+      description: |
+        O saque foi recusado - por validação (`validation_failed`, com o
+        campo em `details`) ou por uma regra de negócio. Nada foi debitado.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            saldo:
+              summary: insufficient_balance
+              value:
+                error:
+                  type: invalid_request_error
+                  code: insufficient_balance
+                  message: 'Saldo disponível para saque: R$ 300,00. Você solicitou R$ 500,00.'
+                  details: {}
+            semChave:
+              summary: no_pix_key
+              description: Bolsão, sem chave na chamada e sem chave cadastrada.
+              value:
+                error:
+                  type: invalid_request_error
+                  code: no_pix_key
+                  message: Cadastre uma chave PIX antes de solicitar saque.
+                  details: {}
+            teto:
+              summary: amount_above_maximum
+              value:
+                error:
+                  type: invalid_request_error
+                  code: amount_above_maximum
+                  message: 'O valor máximo por saque é R$ 15.000,00. Divida em mais de um pedido.'
+                  details: {}
+            chaveInvalida:
+              summary: validation_failed
+              description: O valor não é chave do tipo declarado.
+              value:
+                error:
+                  type: invalid_request_error
+                  code: validation_failed
+                  message: Alguns campos não passaram na validação.
+                  details:
+                    pix_key:
+                      - Chave PIX inválida para o tipo Telefone.
+            splitComPix:
+              summary: validation_failed (conta split)
+              value:
+                error:
+                  type: invalid_request_error
+                  code: validation_failed
+                  message: Alguns campos não passaram na validação.
+                  details:
+                    pix_key:
+                      - O saque desta conta vai para a conta bancária cadastrada. Chave PIX só vale para contas no modelo bolsão.
 
     RateLimited:
       description: |

@@ -48,6 +48,11 @@ vazou não deveria conseguir criar cobrança nem estornar.
 | `refunds:write` | `POST /v1/charges/{code}/refund` |
 | `balance:read` | `GET /v1/balance` |
 | `cards:manage` | As três operações de `/v1/cards` |
+| `withdrawals:write` | `POST /v1/withdrawals` |
+| `withdrawals:read` | `GET /v1/withdrawals` e `GET /v1/withdrawals/{code}` |
+
+`withdrawals:write` não vem marcado numa chave nova. Ele manda o saldo para a chave PIX que a chamada
+disser, e por isso só deve estar na chave da integração que paga. Ver [Saques](/essenciais/saques).
 
 ## 401 e 403 respondem coisas diferentes
 

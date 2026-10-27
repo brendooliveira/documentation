@@ -1,0 +1,177 @@
+---
+title: "Saques"
+description: "Tirar dinheiro do saldo pela API: PIX para uma chave no bolsão, TED para a conta bancária no split."
+icon: "banknote"
+---
+
+import Suporte from "/snippets/suporte.mdx";
+import NotaIdempotencia from "/snippets/nota-idempotencia.mdx";
+
+`POST /v1/withdrawals` tira dinheiro do saldo do vendedor e manda para o destino dele — o mesmo saque
+do painel, agora disponível para o seu servidor.
+
+```bash PIX de 50000 centavos para um e-mail
+curl -X POST https://api.usevext.com/v1/withdrawals \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Idempotency-Key: saque-fornecedor-2026-10-27" \
+  -H "Content-Type: application/json" \
+  -d '{"amount": 50000, "pix_key_type": "email", "pix_key": "financeiro@fornecedor.com.br"}'
+```
+
+<NotaIdempotencia />
+
+<Warning>
+  Envie sempre uma `Idempotency-Key` no saque. Com ela, repetir um pedido cuja resposta se perdeu
+  devolve o mesmo saque; sem ela, o retry de uma conexão que caiu pede o saldo duas vezes.
+</Warning>
+
+## O destino depende do modelo da conta
+
+Cada conta da Vext recebe num de dois modelos, e o modelo decide para onde o saque vai.
+
+| Modelo | Destino | `method` | O que mandar |
+| --- | --- | --- | --- |
+| Bolsão | Uma chave PIX | `pix` | `pix_key_type` e `pix_key` — ou nada, para a chave padrão |
+| Split | A conta bancária padrão do recebedor | `ted` | Só `amount` |
+
+O modelo é definido pela Vext na abertura da conta. Para saber qual é o seu, abra **Financeiro** no
+painel: contas no bolsão cadastram chaves PIX; contas no split, contas bancárias.
+
+<Note>
+  No split, mandar `pix_key` devolve `422`, e não um saque para a conta bancária. Preferimos recusar
+  a ignorar: aceitar calado deixaria você acreditando que o dinheiro foi para a chave.
+</Note>
+
+## Chave PIX: o tipo é declarado
+
+`pix_key_type` e `pix_key` andam juntos — um sem o outro é `422`. Omitindo os dois, o saque vai para a
+chave padrão cadastrada no painel.
+
+| `pix_key_type` | Aceita | Gravamos como |
+| --- | --- | --- |
+| `cpf` | Com ou sem pontuação, dígito verificador conferido | Só os 11 dígitos |
+| `cnpj` | Com ou sem pontuação, dígito verificador conferido | Só os 14 dígitos |
+| `email` | Até 77 caracteres | Em minúsculas |
+| `phone` | DDD e número, com ou sem `+55` | `+55` + DDD + número |
+| `random` | A chave aleatória (UUID). `evp` é aceito como sinônimo | Em minúsculas, com hífens |
+
+Declarar o tipo é o que separa um celular de um CPF quando os onze dígitos servem aos dois:
+`11144477735` é um CPF válido e também o celular (11) 14447-7735. Com `"pix_key_type": "phone"`, o
+PIX vai para o telefone.
+
+Um valor que não é do tipo declarado é **recusado, nunca reclassificado**. Um e-mail mandado como
+`phone` é erro de integração, e corrigi-lo em silêncio esconderia esse erro até o dia em que ele
+mandasse dinheiro para o lugar errado.
+
+A chave informada passa a fazer parte do cadastro da loja e aparece em **Financeiro** no painel. Ela
+vira a padrão só se a loja ainda não tiver uma; mandar a mesma chave de novo não duplica o cadastro
+nem troca a padrão que o vendedor escolheu. A chave entra no cadastro mesmo quando o saque é recusado
+— por saldo, por exemplo.
+
+## A taxa sai de dentro do valor
+
+`amount` é o que sai do saldo. A taxa vem de dentro dele, e o que chega ao destino é `net`:
+
+```json Saque PIX aguardando conferência
+{
+  "object": "withdrawal",
+  "id": "wd_01k1y8d4h1g2f3e4d5c6b7a8z9",
+  "status": "awaiting_approval",
+  "method": "pix",
+  "amount": 50000,
+  "currency": "BRL",
+  "fee": 367,
+  "net": 49633,
+  "pix_key_type": "email",
+  "pix_key": "fi********@fornecedor.com.br",
+  "failed_reason": null,
+  "created_at": "2026-10-27T14:02:00+00:00",
+  "processed_at": null
+}
+```
+
+Sempre `net = amount - fee`. A chave vem mascarada: a resposta acaba no log do seu servidor, e a
+chave por extenso é dado pessoal de alguém que nem sempre é o vendedor.
+
+O saldo é debitado **no pedido**, e não quando o dinheiro sai. É o que impede dois pedidos
+simultâneos de sacarem o mesmo saldo. Se o saque for recusado ou falhar depois, o valor e a taxa
+voltam ao saldo.
+
+Para saber quanto dá para pedir, use `withdrawable` de [`GET /v1/balance`](/essenciais/saldo).
+
+## Status
+
+| `status` | Significa | O dinheiro |
+| --- | --- | --- |
+| `awaiting_approval` | Pedido no bolsão, esperando a conferência | Debitado do saldo |
+| `approved` | Conferido, transferência a caminho | Debitado do saldo |
+| `pending` / `processing` | Com o banco | Debitado do saldo |
+| `paid` | Chegou ao destino | Saiu |
+| `failed` | O banco recusou. `failed_reason` diz por quê | Voltou ao saldo |
+| `canceled` | Cancelado | Voltou ao saldo |
+| `rejected` | Recusado na conferência | Voltou ao saldo |
+
+No bolsão, todo saque nasce `awaiting_approval`. O que acontece depois depende do saque automático
+da conta:
+
+- **Saque automático desligado** — o saque fica pendente em `awaiting_approval` até a Vext aprovar.
+  A chave PIX é digitada por quem pede, e para e-mail, telefone e chave aleatória não existe
+  conferência automática de titular; a aprovação é essa conferência.
+- **Saque automático ligado** — o saque sai da fila na hora, sem esperar ninguém.
+
+Pedir pela API ou pelo painel não muda isso: as duas portas seguem a mesma regra.
+
+<Note>
+  "Pendente de aprovação" é `awaiting_approval`, e não `pending`. `pending` quer dizer que o saque já
+  está com o banco. Um sistema que espera `pending` para mostrar "aguardando aprovação" nunca mostra.
+</Note>
+
+`rejected` não é `failed`. Em `rejected` quem disse não foi a conferência da Vext; em `failed`, o
+banco. Os dois devolvem o dinheiro ao saldo.
+
+## Acompanhar até cair
+
+Assine o webhook [`withdrawal.paid`](/api-reference/webhooks/withdrawal-paid): ele chega quando o
+dinheiro cai no destino, nos dois modelos. Isso vale também para o saque que a Vext marca como pago
+depois do fato — o seu sistema recebe o evento mesmo quando o vendedor já sabia.
+
+Os desfechos sem dinheiro saindo (`failed`, `canceled`, `rejected`) não viram evento. Para eles,
+consulte `GET /v1/withdrawals/{code}`, ou percorra `GET /v1/withdrawals?status=awaiting_approval` para
+ver o que ainda espera aprovação.
+
+## Quando o saque é recusado
+
+Toda recusa volta em `422`, com o motivo em `code`, e **nada é debitado**.
+
+| `code` | O que fazer |
+| --- | --- |
+| `validation_failed` | `details.pix_key` ou `details.pix_key_type` dizem o que corrigir |
+| `insufficient_balance` | Peça no máximo o `withdrawable` do saldo |
+| `negative_balance` | A conta tem dívida de estorno. As próximas vendas cobrem; o saque volta a funcionar depois |
+| `amount_below_fee` | O valor precisa ser maior que a taxa |
+| `amount_below_minimum` | O líquido precisa ser de pelo menos R\$ 1,00 |
+| `amount_above_maximum` | Divida em mais de um pedido. O teto por saque PIX vem na `message` |
+| `no_pix_key` | Bolsão sem chave na chamada e sem chave padrão. Mande `pix_key_type` e `pix_key` |
+| `no_bank_account` | Split sem conta bancária padrão. O caminho é o painel |
+| `no_pooled_account` | Nada na chamada resolve. Fale com o suporte |
+| `seller_not_approved` | Nada na chamada resolve. O caminho é o painel |
+
+## Escopos
+
+Pedir saque exige `withdrawals:write`; consultar e listar, `withdrawals:read`. Nenhum dos dois vem
+marcado numa chave nova: `withdrawals:write` manda o saldo para a chave PIX que a chamada disser, e
+uma chave vazada com ele esvazia a conta. Marque-o só na chave da integração que paga. Ver
+[Autenticação](/essenciais/autenticacao#escopos).
+
+## Veja também
+
+<CardGroup cols={2}>
+  <Card title="Saldo do vendedor" icon="wallet" href="/essenciais/saldo">
+    Qual número usar para saber quanto dá para sacar.
+  </Card>
+  <Card title="Solicitar saque" icon="banknote" href="/api-reference/saques/solicitar">
+    A referência do endpoint, com o playground.
+  </Card>
+</CardGroup>
+
+<Suporte />

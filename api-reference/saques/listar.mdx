@@ -1,0 +1,11 @@
+---
+title: "Listar saques"
+description: "Lista os saques da conta, do mais recente para o mais antigo."
+icon: "list"
+openapi: "/api-reference/openapi.yaml GET /v1/withdrawals"
+---
+
+<Note>
+  `?status=awaiting_approval` mostra o que ainda espera a aprovação da Vext. O envelope de paginação é
+  o mesmo da listagem de cobranças — ver [Conciliar cobranças com os seus pedidos](/receitas/conciliacao).
+</Note>

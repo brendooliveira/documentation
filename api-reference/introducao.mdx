@@ -19,10 +19,10 @@ autenticado por chave secreta no header.
 
 <HeadersComuns />
 
-## As nove operações
+## As doze operações
 
-Todas autenticadas por chave secreta. Não há endpoint de saque: ele é pedido pelo painel, e a API
-avisa quando o dinheiro cai, pelo evento `withdrawal.paid`.
+Todas autenticadas por chave secreta. O saque pode ser pedido pela API ou pelo painel — o destino e a
+aprovação estão em [Saques](/essenciais/saques).
 
 | Operação | Endpoint |
 | --- | --- |
@@ -35,6 +35,9 @@ avisa quando o dinheiro cai, pelo evento `withdrawal.paid`.
 | [Consultar cartão guardado](/api-reference/cartoes/consultar) | `GET /v1/cards/{code}` |
 | [Remover cartão guardado](/api-reference/cartoes/remover) | `DELETE /v1/cards/{code}` |
 | [Consultar saldo](/api-reference/saldo/consultar) | `GET /v1/balance` |
+| [Solicitar saque](/api-reference/saques/solicitar) | `POST /v1/withdrawals` |
+| [Listar saques](/api-reference/saques/listar) | `GET /v1/withdrawals` |
+| [Consultar saque](/api-reference/saques/consultar) | `GET /v1/withdrawals/{code}` |
 
 ## Os nove eventos
 

@@ -86,6 +86,7 @@
               "essenciais/ciclo-de-vida-da-cobranca",
               "essenciais/estornos",
               "essenciais/saldo",
+              "essenciais/saques",
               "essenciais/taxas-e-liquidacao"
             ]
           },
@@ -121,7 +122,8 @@
             "pages": [
               "api-reference/objetos/cobranca",
               "api-reference/objetos/cartao-guardado",
-              "api-reference/objetos/comprador"
+              "api-reference/objetos/comprador",
+              "api-reference/objetos/saque"
             ]
           },
           {
@@ -155,6 +157,14 @@
             "group": "Saldo",
             "pages": [
               "api-reference/saldo/consultar"
+            ]
+          },
+          {
+            "group": "Saques",
+            "pages": [
+              "api-reference/saques/solicitar",
+              "api-reference/saques/listar",
+              "api-reference/saques/consultar"
             ]
           },
           {

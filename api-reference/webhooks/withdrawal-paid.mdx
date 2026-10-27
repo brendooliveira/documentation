@@ -1,6 +1,6 @@
 ---
 title: "withdrawal.paid"
-description: "Enviado quando o dinheiro do saque chega à conta bancária do vendedor."
+description: "Enviado quando o dinheiro do saque chega ao destino — conta bancária ou chave PIX."
 icon: "banknote"
 openapi: "/api-reference/openapi.yaml webhook withdrawal.paid"
 ---
@@ -8,6 +8,10 @@ openapi: "/api-reference/openapi.yaml webhook withdrawal.paid"
 <Warning>
   **Confira a assinatura antes de agir.** Ver [Verificar a assinatura](/webhooks/assinatura).
 </Warning>
+
+Enviado nos dois modelos de conta: no split quando a TED cai, no bolsão quando o PIX sai. Só o saque
+pago vira evento — os recusados e os que falharam aparecem em
+[`GET /v1/withdrawals/{code}`](/api-reference/saques/consultar).
 
 Os estados intermediários (`processing`, `pending`) não são entregues: não pedem ação do seu lado, e
 cada entrega tem custo de retentativa.
