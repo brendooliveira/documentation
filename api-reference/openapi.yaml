@@ -219,10 +219,9 @@ paths:
               comItens:
                 summary: Com itens discriminados
                 description: |
-                  A soma de `quantity * amount` de todos os itens precisa
-                  bater exatamente com `amount`. Sem essa conferência o
-                  comprador veria um total diferente da soma do que está
-                  levando.
+                  Mande a soma de `quantity * amount` igual a `amount` para
+                  o comprador ver cada item. Se não bater, a cobrança sai
+                  assim mesmo pelo `amount`, com os itens fundidos num só.
                 value:
                   amount: 10000
                   expires_in: 1800
@@ -2163,9 +2162,9 @@ components:
           allOf:
             - $ref: '#/components/schemas/Cents'
           description: |
-            Valor **unitário** em centavos inteiros. A soma de
-            `quantity * amount` de todos os itens precisa ser exatamente
-            igual ao `amount` da cobrança.
+            Valor **unitário** em centavos inteiros. Quem vale é o
+            `amount` da cobrança: se a soma de `quantity * amount` não
+            bater com ele, os itens são fundidos num só, com o valor cheio.
 
     BoletoInput:
       type: object
@@ -2431,8 +2430,11 @@ components:
           items:
             $ref: '#/components/schemas/ChargeItem'
           description: |
-            A soma de `quantity × amount` de todos os itens deve bater
-            **exatamente** com o `amount` da cobrança.
+            Quem vale é o `amount` da cobrança. Quando a soma de
+            `quantity × amount` bate com ele, cada item chega ao comprador
+            como foi enviado. Quando não bate, a cobrança NÃO é recusada: os
+            itens são fundidos num só, com as descrições juntas e o valor
+            cheio de `amount` - e é esse item que a venda guarda.
 
             **No PIX é obrigatório.** Os itens são a única descrição do que
             está sendo vendido que chega ao arranjo de pagamento, e é o que o
@@ -4291,14 +4293,6 @@ components:
                   type: invalid_request_error
                   code: amount_above_maximum
                   message: O valor está acima do máximo permitido.
-                  details: {}
-            itens:
-              summary: items_do_not_match_amount
-              value:
-                error:
-                  type: invalid_request_error
-                  code: items_do_not_match_amount
-                  message: A soma dos itens deve ser igual ao valor da cobrança.
                   details: {}
             vendedor:
               summary: seller_not_approved

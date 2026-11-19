@@ -26,8 +26,8 @@ Envie o valor em centavos e uma `Idempotency-Key` sua. `reference` é o seu núm
 ele que você reencontra a cobrança depois.
 
 `items` é obrigatório: discrimine o que está sendo vendido. Vendendo uma coisa só, mande um item
-único com o valor cheio — a soma de `quantity * amount` de todos os itens precisa bater exatamente
-com `amount`.
+único com o valor cheio. Se a soma de `quantity * amount` não bater com `amount`, vale o `amount`:
+os itens são fundidos num só.
 
 <CodeGroup>
 

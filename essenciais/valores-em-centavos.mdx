@@ -110,7 +110,6 @@ camada de apresentação e mantenha o inteiro em todo o resto do sistema.
 | `validation_failed` | 422 | Você enviou um decimal, uma string ou um valor negativo. `details.amount` traz a mensagem |
 | `amount_below_minimum` | 422 | O valor é inteiro e válido, mas está abaixo do mínimo da conta |
 | `amount_above_maximum` | 422 | Acima do máximo da conta |
-| `items_do_not_match_amount` | 422 | A soma de `quantity * amount` dos itens não bate com `amount` |
 
 ```json validation_failed
 {
@@ -126,10 +125,9 @@ camada de apresentação e mantenha o inteiro em todo o resto do sistema.
 ```
 
 <Note>
-  `items` é obrigatório em `POST /v1/charges`, e não dispensa `amount`. A soma de `quantity * amount`
-  de todos os itens precisa bater exatamente com o `amount` da cobrança — sem essa conferência, o
-  comprador veria um total diferente da soma do que está levando. Vendendo uma coisa só, mande um
-  item único com o valor cheio.
+  `items` é obrigatório em `POST /v1/charges`, e não dispensa `amount`. Quem vale é o `amount`: se a
+  soma de `quantity * amount` não bater com ele, a cobrança sai assim mesmo, com os itens fundidos
+  num só pelo valor cheio. Para o comprador ver cada item, faça a soma fechar.
 </Note>
 
 ## Veja também

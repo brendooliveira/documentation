@@ -13,9 +13,9 @@ import NotaIdempotencia from "/snippets/nota-idempotencia.mdx";
 <NotaIdempotencia />
 
 <Note>
-  `items` é **obrigatório**. Mande pelo menos um item, e a soma de `quantity * amount` de todos eles
-  precisa bater exatamente com o `amount` da cobrança — senão a chamada volta `422`
-  `items_do_not_match_amount`. Vendendo uma coisa só, mande um item único com o valor cheio.
+  `items` é **obrigatório**. Mande pelo menos um item. Quem vale é o `amount` da cobrança: se a soma
+  de `quantity * amount` não bater com ele, a cobrança sai assim mesmo, com os itens fundidos num só
+  pelo valor cheio. Para o comprador ver cada item, faça a soma fechar.
 </Note>
 
 <Note>

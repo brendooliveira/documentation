@@ -18,7 +18,6 @@
 | `validation_failed` | 422 | `invalid_request_error` | `details` traz campo → mensagens. Corrija e reenvie |
 | `amount_below_minimum` | 422 | `invalid_request_error` | Valor abaixo do mínimo permitido |
 | `amount_above_maximum` | 422 | `invalid_request_error` | Valor acima do máximo permitido |
-| `items_do_not_match_amount` | 422 | `invalid_request_error` | A soma de `quantity * amount` dos itens tem que bater com `amount` |
 | `seller_not_approved` | 422 | `invalid_request_error` | Nada na chamada resolve. O caminho é o painel |
 | `provider_rejected` | 422 | `invalid_request_error` | Confira os dados do comprador e o valor |
 | `card_expired` | 422 | `invalid_request_error` | O cartão guardado venceu. Peça um novo ao comprador |
