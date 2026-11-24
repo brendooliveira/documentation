@@ -1,13 +1,27 @@
 ---
 title: "Entregas e retentativas"
-description: "Qualquer 2xx encerra a entrega; o resto agenda nova tentativa. Como deduplicar pelo id do evento."
+description: "2xx entrega, 4xx recusa, o resto é tentado de novo por até 15 dias. Como deduplicar pelo id do evento."
 icon: "send"
 ---
 
 import Suporte from "/snippets/suporte.mdx";
 
-Qualquer resposta `2xx` encerra a entrega. Qualquer coisa fora dessa faixa — inclusive um timeout —
-agenda nova tentativa.
+O que o seu servidor responde decide o destino da entrega:
+
+| Resposta | O que acontece |
+| --- | --- |
+| `2xx` | Entregue. Fim. |
+| `4xx` (exceto `408`, `425` e `429`) | **Recusada.** Não tentamos de novo: insistir não muda a resposta de uma rota que não existe ou de uma assinatura que você não reconhece. |
+| `5xx`, `408`, `425`, `429`, timeout (10 s) ou falha de conexão | Nova tentativa em 1 min, 5 min, 30 min, 2 h, 6 h — e daí a cada 6 h, por até **15 dias**. |
+
+<Warning>
+  Não responda `4xx` para dizer "agora não". Um `400` porque o banco do seu lado caiu encerra a entrega
+  e o evento só volta se você reenviar pelo painel. Para "tente depois", responda `503`.
+</Warning>
+
+Cada tentativa fica registrada com o código que o seu servidor devolveu (ou o motivo de não ter havido
+resposta), e o histórico aparece no detalhe da entrega em **Desenvolvedores**. Uma entrega recusada, ou
+que não chegou dentro dos 15 dias, pode ser reenviada à mão por lá depois que você corrigir o seu lado.
 
 ## Responda rápido, processe depois
 
@@ -34,8 +48,8 @@ O padrão que resolve isso tem três passos:
 
 ## Deduplique pelo `id` do evento
 
-O `id` (`evt_…`) é estável entre as retentativas da mesma entrega. Uma entrega que desistiu depois
-das retentativas pode ser reenviada à mão pelo painel — e o `id` continua o mesmo, justamente para a
+O `id` (`evt_…`) é estável entre as retentativas da mesma entrega. Uma entrega recusada ou que não
+chegou dentro do prazo pode ser reenviada à mão pelo painel — e o `id` continua o mesmo, justamente para a
 sua idempotência reconhecê-lo.
 
 <CodeGroup>
@@ -89,8 +103,8 @@ return "", 200
 
 ## Depurando uma entrega
 
-Cada tentativa tem um `X-Vext-Delivery`. É por ele que localizamos a tentativa, a resposta do seu
-servidor e o horário. Registre-o em log mesmo quando tudo dá certo: quando algo der errado, ele é a
+Cada entrega tem um `X-Vext-Delivery`, o mesmo em todas as tentativas. É por ele que localizamos as
+tentativas, a resposta do seu servidor a cada uma e o horário. Registre-o em log mesmo quando tudo dá certo: quando algo der errado, ele é a
 diferença entre um chamado de cinco minutos e uma tarde de investigação.
 
 ## O corpo pode chegar reduzido

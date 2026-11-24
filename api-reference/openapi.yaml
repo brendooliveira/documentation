@@ -1231,9 +1231,12 @@ paths:
 # assinou, com o seu próprio segredo de assinatura.
 #
 # Cada fato vira no máximo UMA entrega por endpoint: uma reentrega do
-# provedor para nós não vira uma segunda entrega para você. Uma entrega
-# que desistiu depois das retentativas pode ser reenviada à mão pelo
-# painel - e aí o `id` do evento é o MESMO, para a sua idempotência
+# provedor para nós não vira uma segunda entrega para você.
+#
+# Só 2xx entrega, e só 4xx recusa (exceto 408, 425 e 429). Timeout, falha
+# de conexão e 5xx são tentados de novo por até 15 dias. Uma entrega
+# recusada, ou que não chegou dentro desse prazo, pode ser reenviada à mão
+# pelo painel - e aí o `id` do evento é o MESMO, para a sua idempotência
 # reconhecê-lo.
 webhooks:
   charge.paid:
@@ -1299,9 +1302,18 @@ webhooks:
             processe depois: demorar vira retentativa, e retentativa em
             fluxo de dinheiro é como um pagamento acaba contabilizado duas
             vezes.
+        '4XX':
+          description: |
+            Recusa. A entrega é encerrada como `rejected`, sem nova
+            tentativa - insistir não muda a resposta de uma rota que não
+            existe ou de uma assinatura que você não reconhece. Corrija do
+            seu lado e reenvie pelo painel. As exceções são 408, 425 e 429,
+            que pedem para voltar depois e seguem sendo tentadas.
         default:
           description: |
-            Qualquer resposta fora da faixa 2xx agenda nova tentativa.
+            5xx, timeout (10 segundos) ou falha de conexão: agenda nova
+            tentativa - em 1 min, 5 min, 30 min, 2 h, 6 h e daí a cada 6 h,
+            por até 15 dias.
 
   charge.failed:
     post:
@@ -1346,7 +1358,7 @@ webhooks:
         '200':
           description: Recebido.
         default:
-          description: Fora da faixa 2xx, agenda nova tentativa.
+          description: 4xx recusa e encerra; 5xx, 408, 429 ou sem resposta agenda nova tentativa.
 
   charge.in_analysis:
     post:
@@ -1388,7 +1400,7 @@ webhooks:
         '200':
           description: Recebido.
         default:
-          description: Fora da faixa 2xx, agenda nova tentativa.
+          description: 4xx recusa e encerra; 5xx, 408, 429 ou sem resposta agenda nova tentativa.
 
   charge.refunded:
     post:
@@ -1462,7 +1474,7 @@ webhooks:
         '200':
           description: Recebido.
         default:
-          description: Fora da faixa 2xx, agenda nova tentativa.
+          description: 4xx recusa e encerra; 5xx, 408, 429 ou sem resposta agenda nova tentativa.
 
   charge.chargedback:
     post:
@@ -1516,7 +1528,7 @@ webhooks:
         '200':
           description: Recebido.
         default:
-          description: Fora da faixa 2xx, agenda nova tentativa.
+          description: 4xx recusa e encerra; 5xx, 408, 429 ou sem resposta agenda nova tentativa.
 
   withdrawal.paid:
     post:
@@ -1560,7 +1572,7 @@ webhooks:
         '200':
           description: Recebido.
         default:
-          description: Fora da faixa 2xx, agenda nova tentativa.
+          description: 4xx recusa e encerra; 5xx, 408, 429 ou sem resposta agenda nova tentativa.
 
   med.opened:
     post:
@@ -1666,7 +1678,7 @@ webhooks:
         '200':
           description: Recebido.
         default:
-          description: Fora da faixa 2xx, agenda nova tentativa.
+          description: 4xx recusa e encerra; 5xx, 408, 429 ou sem resposta agenda nova tentativa.
 
   med.approved:
     post:
@@ -1783,7 +1795,7 @@ webhooks:
         '200':
           description: Recebido.
         default:
-          description: Fora da faixa 2xx, agenda nova tentativa.
+          description: 4xx recusa e encerra; 5xx, 408, 429 ou sem resposta agenda nova tentativa.
 
   med.rejected:
     post:
@@ -1887,7 +1899,7 @@ webhooks:
         '200':
           description: Recebido.
         default:
-          description: Fora da faixa 2xx, agenda nova tentativa.
+          description: 4xx recusa e encerra; 5xx, 408, 429 ou sem resposta agenda nova tentativa.
 
 components:
   securitySchemes:
