@@ -1,6 +1,6 @@
 ---
 title: "med.rejected"
-description: "Enviado quando a contestação de Pix é indeferida. O valor retido volta ao saldo e a venda segue de pé."
+description: "Enviado quando a contestação de Pix é indeferida ou cancelada. O valor retido volta ao saldo e a venda segue de pé."
 icon: "thumbs-up"
 openapi: "/api-reference/openapi.yaml webhook med.rejected"
 ---
@@ -15,6 +15,12 @@ openapi: "/api-reference/openapi.yaml webhook med.rejected"
 entrega pode seguir. O valor retido voltou ao saldo disponível.
 
 `data.charge` continua `paid`, e `refund` vem `null` porque não houve estorno.
+
+## Contestação cancelada
+
+O mesmo evento chega quando a contestação é **cancelada** — no Banco Central ou pelo provedor — em
+vez de indeferida. Para você o efeito é idêntico: o valor voltou e a venda vale. A diferença está
+só em `data.med.status`, que vem `canceled` em vez de `rejected`. Trate os dois do mesmo jeito.
 
 Confira a assinatura antes de agir. Ver [Verificar a assinatura](/webhooks/assinatura).
 

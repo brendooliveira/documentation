@@ -1802,8 +1802,9 @@ webhooks:
       summary: Contestação de Pix ganha
       operationId: webhookMedRejected
       description: |
-        A contestação foi **indeferida**: o valor retido voltou ao seu
-        saldo disponível e a venda segue de pé.
+        A contestação foi **indeferida** ou **cancelada**: o valor retido
+        voltou ao seu saldo disponível e a venda segue de pé. No cancelamento,
+        `data.med.status` vem como `canceled`.
 
         Como em `med.approved`, o nome descreve a decisão sobre a
         CONTESTAÇÃO - aqui é a boa notícia. O painel mostra "Ganha".
@@ -3881,11 +3882,12 @@ components:
           example: med_01k2m4n5r3t7v9x1z3b5d7f9h1
         status:
           type: string
-          enum: [open, under_review, approved, rejected, refund_failed]
+          enum: [open, under_review, approved, rejected, refund_failed, canceled]
           description: |
             **`approved` é a contestação deferida - ou seja, você perdeu**;
             `rejected` é você ganhando. O adjetivo descreve a decisão sobre
-            a contestação, não sobre a loja.
+            a contestação, não sobre a loja. `canceled` também é você
+            ganhando: a contestação foi cancelada e o valor voltou.
 
             `open` e `under_review` ainda retêm o valor; `refund_failed`
             também, e significa que a decisão saiu contra você mas o

@@ -19,7 +19,7 @@ você descobre que um PIX foi pago sem ficar perguntando.
 | [`charge.chargedback`](/api-reference/webhooks/charge-chargedback) | O portador contesta a compra na operadora | `charge` e `refund` |
 | [`med.opened`](/api-reference/webhooks/med-opened) | O comprador abre uma contestação de Pix | `med` e `charge` |
 | [`med.approved`](/api-reference/webhooks/med-approved) | A contestação é deferida — a venda é devolvida | `med` e `charge` |
-| [`med.rejected`](/api-reference/webhooks/med-rejected) | A contestação é indeferida — a venda segue de pé | `med` e `charge` |
+| [`med.rejected`](/api-reference/webhooks/med-rejected) | A contestação é indeferida ou cancelada — a venda segue de pé | `med` e `charge` |
 | [`withdrawal.paid`](/api-reference/webhooks/withdrawal-paid) | O saque cai na conta do vendedor | `withdrawal` |
 
 `charge.paid` é o evento sobre o qual o seu sistema deve agir: liberar acesso, faturar, dar baixa no
